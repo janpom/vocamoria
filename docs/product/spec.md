@@ -197,7 +197,9 @@ The Practice screen picks the next `(exerciseType, words)` automatically. **Pick
      ```
      The `× 0.5` multiplier on `pairs` slows it down (tedious for low per-step gain). All other types have no multiplier.
 
-`userSkill` is an exponential moving average of recent exercise scores (0..1, defaults 0.5, alpha 0.15). After every exercise it's updated with `successCount / totalCount` of that exercise (so a pairs round contributes a fractional score). Persisted in `vocab-practice` alongside per-word state. The blend's heavy weight on `userSkill` is what lets a 0/0 word get a hard exercise when the user is on a hot streak.
+`userSkill` is the **mean of the last 5 exercise scores** (a sliding window, `RECENT_WINDOW = 5`). Each completed exercise contributes one score: `1.0` for a single-question success, `0.0` for a failure, and `correctRows / totalRows` for a pairs round. Missing slots (fewer than 5 exercises played) are padded with the neutral `0.5`. Persisted in `vocab-practice` as `recentScores: number[]`.
+
+This makes recent attempts dominate: 5 successes in a row → `userSkill = 1.0` → algorithm pushes hard exercises even on fresh words; 5 failures → `userSkill = 0.0` → algorithm backs off to easy ones to rebuild momentum. A pairs result of `5/8` mid-window contributes a single 0.625 score — proportional, not binary.
 
 3. **For pairs**, the anchor is one of 8; the remaining 7 are sampled by the same `wordWeight` from the rest of the vocab.
 

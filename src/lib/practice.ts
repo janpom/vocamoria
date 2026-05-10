@@ -3,15 +3,21 @@ import type { WordMastery } from './mastery';
 export const PRACTICE_KEY = 'vocab-practice';
 
 export const USER_SKILL_DEFAULT = 0.5;
-export const USER_SKILL_ALPHA = 0.15;
+export const RECENT_WINDOW = 5;
 
 export type PracticeState = {
   words: Record<string, WordMastery>;
-  userSkill: number;
+  recentScores: number[];
 };
 
 export function emptyPracticeState(): PracticeState {
-  return { words: {}, userSkill: USER_SKILL_DEFAULT };
+  return { words: {}, recentScores: [] };
+}
+
+function clampScore(n: unknown): number | null {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return null;
+  if (n < 0 || n > 1) return null;
+  return n;
 }
 
 export function parsePracticeState(raw: string | null): PracticeState {
@@ -21,22 +27,30 @@ export function parsePracticeState(raw: string | null): PracticeState {
     if (!parsed || typeof parsed !== 'object' || !parsed.words || typeof parsed.words !== 'object') {
       return emptyPracticeState();
     }
-    const userSkill =
-      typeof parsed.userSkill === 'number' && parsed.userSkill >= 0 && parsed.userSkill <= 1
-        ? parsed.userSkill
-        : USER_SKILL_DEFAULT;
+    const recentScores = Array.isArray(parsed.recentScores)
+      ? (parsed.recentScores
+          .map(clampScore)
+          .filter((n): n is number => n !== null)
+          .slice(-RECENT_WINDOW))
+      : [];
     return {
       words: parsed.words as Record<string, WordMastery>,
-      userSkill,
+      recentScores,
     };
   } catch {
     return emptyPracticeState();
   }
 }
 
-export function updateUserSkill(skill: number, exerciseScore: number): number {
-  const next = skill + USER_SKILL_ALPHA * (exerciseScore - skill);
-  return Math.max(0, Math.min(1, next));
+export function pushRecentScore(scores: readonly number[], score: number): number[] {
+  const next = [...scores, score];
+  return next.length > RECENT_WINDOW ? next.slice(next.length - RECENT_WINDOW) : next;
+}
+
+export function userSkillOf(scores: readonly number[]): number {
+  const window = scores.slice(-RECENT_WINDOW);
+  const sum = window.reduce((a, b) => a + b, 0) + (RECENT_WINDOW - window.length) * USER_SKILL_DEFAULT;
+  return sum / RECENT_WINDOW;
 }
 
 export function loadPracticeState(storage: Pick<Storage, 'getItem'>): PracticeState {

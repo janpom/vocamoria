@@ -5,8 +5,8 @@ import { type ExerciseType, applyExerciseResult, emptyWordMastery, overallProgre
 import {
   type PracticeState,
   loadPracticeState,
+  pushRecentScore,
   savePracticeState,
-  updateUserSkill,
 } from '../lib/practice';
 import { loadVocab } from '../lib/vocab';
 import HangmanExercise from '../practice/HangmanExercise';
@@ -48,7 +48,7 @@ export default function Practice() {
     const score = outcome.length > 0 ? successCount / outcome.length : 0;
     const next: PracticeState = {
       words: nextWords,
-      userSkill: updateUserSkill(state.userSkill, score),
+      recentScores: pushRecentScore(state.recentScores, score),
     };
     savePracticeState(localStorage, next);
     setState(next);

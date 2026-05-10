@@ -9,7 +9,7 @@ import {
   progressOf,
   streakOf,
 } from './mastery';
-import { USER_SKILL_DEFAULT, type PracticeState } from './practice';
+import { USER_SKILL_DEFAULT, type PracticeState, userSkillOf } from './practice';
 import type { Vocab, Word } from './types';
 
 export const PAIRS_EXERCISE_SIZE = 8;
@@ -121,7 +121,8 @@ export function pickNextExercise(
   const anchorMastery = masteryOf(state, anchor.id);
 
   const eligible = eligibleExercises(vocab.words.length);
-  const exType = chooseTypeForWord(anchorMastery, eligible, state.userSkill, random);
+  const userSkill = userSkillOf(state.recentScores);
+  const exType = chooseTypeForWord(anchorMastery, eligible, userSkill, random);
 
   if (exType === 'pairs') {
     const more = pickWords(
