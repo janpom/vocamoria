@@ -9,9 +9,14 @@ import type { Vocab, Word } from './types';
 
 export const PAIRS_EXERCISE_SIZE = 8;
 
+export const TYPE_WEIGHT_MULTIPLIER: Partial<Record<ExerciseType, number>> = {
+  pairs: 0.5,
+};
+
 export function exerciseWeight(exType: ExerciseType, progress: number): number {
   const normRank = (EXERCISE_RANK[exType] - 1) / (EXERCISE_TYPES.length - 1);
-  return Math.exp(-Math.pow(normRank - progress, 2) * 8) + 0.1;
+  const base = Math.exp(-Math.pow(normRank - progress, 2) * 8) + 0.1;
+  return base * (TYPE_WEIGHT_MULTIPLIER[exType] ?? 1);
 }
 
 export function eligibleExercises(vocabSize: number): ExerciseType[] {

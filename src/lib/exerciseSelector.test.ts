@@ -43,6 +43,13 @@ describe('exerciseWeight', () => {
     expect(Math.min(...ranks)).toBe(1);
     expect(Math.max(...ranks)).toBe(7);
   });
+
+  it('applies the pairs multiplier so pairs is half its peak weight', () => {
+    // At progress=0, pairs and quiz-l-n are both near the easy end.
+    // pairs is rank 1 (peak), quiz-l-n is rank 2 (slightly off-peak).
+    // With the 0.5 multiplier on pairs, quiz-l-n should outweigh pairs at p=0.
+    expect(exerciseWeight('pairs', 0)).toBeLessThan(exerciseWeight('quiz-l-n', 0));
+  });
 });
 
 describe('wordWeight', () => {
