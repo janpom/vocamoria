@@ -1,8 +1,7 @@
 import { useMemo } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { loadProgress } from '../lib/progress';
-import { masteryLabel } from '../lib/srs';
-import type { Mastery } from '../lib/srs';
+import { type Mastery, masteryLabel } from '../lib/mastery';
+import { loadPracticeState } from '../lib/practice';
 import { loadVocab } from '../lib/vocab';
 
 const MASTERY_STYLE: Record<Mastery, string> = {
@@ -13,19 +12,19 @@ const MASTERY_STYLE: Record<Mastery, string> = {
 
 export default function WordList() {
   const vocab = useMemo(() => loadVocab(localStorage), []);
-  const progress = useMemo(() => loadProgress(localStorage), []);
+  const state = useMemo(() => loadPracticeState(localStorage), []);
 
   if (vocab.words.length === 0) return <Navigate to="/import" replace />;
 
   const rows = vocab.words.map((w) => {
-    const stats = progress.words[w.id];
-    const box = stats?.box ?? 0;
+    const m = state.words[w.id];
+    const progress = m?.progress ?? 0;
     return {
       word: w,
-      box,
-      mastery: masteryLabel(box),
-      seen: stats?.seen ?? 0,
-      correct: stats?.correct ?? 0,
+      progress,
+      mastery: masteryLabel(progress),
+      attempts: m?.attempts ?? 0,
+      successes: m?.successes ?? 0,
     };
   });
 
@@ -46,14 +45,16 @@ export default function WordList() {
                 <div className="font-medium truncate">{r.word.term}</div>
                 <div className="text-sm text-slate-600 truncate">{r.word.translation}</div>
               </div>
-              <span
-                className={`text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap ${MASTERY_STYLE[r.mastery]}`}
-              >
-                {r.mastery}
-              </span>
-              <span className="text-xs text-slate-500 tabular-nums whitespace-nowrap">
-                {r.correct}/{r.seen}
-              </span>
+              <div className="flex flex-col items-end gap-0.5">
+                <span
+                  className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${MASTERY_STYLE[r.mastery]}`}
+                >
+                  {r.mastery}
+                </span>
+                <span className="text-xs text-slate-500 tabular-nums whitespace-nowrap">
+                  {Math.round(r.progress * 100)}% · {r.successes}/{r.attempts}
+                </span>
+              </div>
             </li>
           ))}
         </ul>

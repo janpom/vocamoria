@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { PROGRESS_KEY } from '../lib/progress';
+import { PRACTICE_KEY } from '../lib/practice';
 import { VOCAB_KEY } from '../lib/vocab';
 
 export default function Settings() {
@@ -8,14 +8,14 @@ export default function Settings() {
   const [confirming, setConfirming] = useState<'progress' | 'vocab' | null>(null);
 
   const resetProgress = () => {
-    localStorage.removeItem(PROGRESS_KEY);
+    localStorage.removeItem(PRACTICE_KEY);
     setConfirming(null);
     navigate('/');
   };
 
   const resetVocab = () => {
     localStorage.removeItem(VOCAB_KEY);
-    localStorage.removeItem(PROGRESS_KEY);
+    localStorage.removeItem(PRACTICE_KEY);
     setConfirming(null);
     navigate('/import');
   };
@@ -40,7 +40,7 @@ export default function Settings() {
 
           <ResetButton
             label="Reset progress"
-            confirm="Reset all word stats, streak, and XP? Your vocab list stays."
+            confirm="Reset all per-word mastery and the overall progress bar? Your vocab list stays."
             confirming={confirming === 'progress'}
             onAsk={() => setConfirming('progress')}
             onCancel={() => setConfirming(null)}

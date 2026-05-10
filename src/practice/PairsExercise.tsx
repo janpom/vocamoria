@@ -17,89 +17,36 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Fragment, type ReactNode, useMemo, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
-import { applyRoundResult, loadProgress, saveProgress } from '../lib/progress';
-import { selectRound, shuffle } from '../lib/selection';
-import { newWordStats, recordRecognition } from '../lib/srs';
-import type { Progress, Word, WordStats } from '../lib/types';
-import { loadVocab } from '../lib/vocab';
-import RoundSummary, { type RoundResult } from '../screens/RoundSummary';
+import { shuffle } from '../lib/selection';
+import type { Word } from '../lib/types';
+import type { ExerciseOutcome, PairsExerciseProps } from './types';
 
-const PAIRS_ROUND_SIZE = 8;
-
-type Finished = {
-  progress: Progress;
-  xpEarned: number;
-  streakBumped: boolean;
-  results: RoundResult[];
-};
-
-function shuffleAvoidingIdentity(round: Word[], reference: Word[]): Word[] {
-  if (round.length < 2) return shuffle(round);
-  let out = shuffle(round);
+function shuffleAvoidingIdentity(words: Word[], reference: Word[]): Word[] {
+  if (words.length < 2) return shuffle(words);
+  let out = shuffle(words);
   let attempts = 0;
   while (attempts < 8 && out.every((w, i) => w.id === reference[i].id)) {
-    out = shuffle(round);
+    out = shuffle(words);
     attempts += 1;
   }
   return out;
 }
 
-export default function Pairs() {
-  const navigate = useNavigate();
-  const vocab = useMemo(() => loadVocab(localStorage), []);
-  const startingProgress = useMemo(() => loadProgress(localStorage), []);
-  const round = useMemo(
-    () => selectRound(vocab, startingProgress, new Date(), { size: PAIRS_ROUND_SIZE }),
-    [vocab, startingProgress],
-  );
-  const leftCol = useMemo(() => shuffle(round), [round]);
+export default function PairsExercise({ words, onComplete }: PairsExerciseProps) {
+  const leftCol = useMemo(() => shuffle(words), [words]);
   const initialRight = useMemo(
-    () => shuffleAvoidingIdentity(round, leftCol),
-    [round, leftCol],
+    () => shuffleAvoidingIdentity(words, leftCol),
+    [words, leftCol],
   );
 
   const [rightCol, setRightCol] = useState<Word[]>(() => initialRight);
   const [submitted, setSubmitted] = useState(false);
-  const [finished, setFinished] = useState<Finished | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
-
-  if (vocab.words.length === 0) return <Navigate to="/import" replace />;
-
-  if (round.length === 0) {
-    return (
-      <main className="min-h-dvh p-6 flex items-center justify-center bg-sky-50 text-slate-900">
-        <div className="max-w-md text-center space-y-4">
-          <h1 className="text-2xl font-bold">No words to play</h1>
-          <button
-            type="button"
-            onClick={() => navigate('/import')}
-            className="px-4 py-2 rounded-lg bg-sky-600 text-white font-medium"
-          >
-            Import vocab
-          </button>
-        </div>
-      </main>
-    );
-  }
-
-  if (finished) {
-    return (
-      <RoundSummary
-        results={finished.results}
-        xpEarned={finished.xpEarned}
-        streakCount={finished.progress.streak.count}
-        streakBumped={finished.streakBumped}
-        onPlayAgain={() => navigate(0)}
-        onHome={() => navigate('/')}
-      />
-    );
-  }
 
   const onDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -115,36 +62,11 @@ export default function Pairs() {
   const onSubmit = () => setSubmitted(true);
 
   const onContinue = () => {
-    const now = new Date();
-    const updates: Record<string, WordStats> = {};
-    const results: RoundResult[] = [];
-    let correctCount = 0;
-    for (let i = 0; i < leftCol.length; i++) {
-      const leftWord = leftCol[i];
-      const right = rightCol[i];
-      const isCorrect = right?.id === leftWord.id;
-      results.push({ word: leftWord, correct: isCorrect });
-      const prev = startingProgress.words[leftWord.id] ?? newWordStats(now);
-      if (isCorrect) {
-        updates[leftWord.id] = recordRecognition(prev, now);
-        correctCount += 1;
-      } else {
-        updates[leftWord.id] = {
-          ...prev,
-          seen: prev.seen + 1,
-          lastSeen: now.toISOString(),
-        };
-      }
-    }
-    const xpEarned = correctCount * 10 + 50;
-    const newProgress = applyRoundResult(startingProgress, updates, xpEarned, now);
-    saveProgress(localStorage, newProgress);
-    setFinished({
-      progress: newProgress,
-      xpEarned,
-      streakBumped: newProgress.streak.count > startingProgress.streak.count,
-      results,
-    });
+    const out: ExerciseOutcome = leftCol.map((leftWord, i) => ({
+      wordId: leftWord.id,
+      success: rightCol[i]?.id === leftWord.id,
+    }));
+    onComplete(out);
   };
 
   const correctSoFar = submitted
@@ -161,20 +83,11 @@ export default function Pairs() {
   };
 
   return (
-    <main className="min-h-dvh p-4 bg-sky-50 text-slate-900 flex flex-col">
-      <header className="max-w-md w-full mx-auto mb-3 flex items-center justify-between text-sm text-slate-600">
-        <button type="button" onClick={() => navigate('/')} className="underline text-sky-700">
-          Home
-        </button>
-        <span>
-          {submitted ? `${correctSoFar} / ${leftCol.length} correct` : 'Reorder right column'}
-        </span>
-      </header>
-
-      <p className="max-w-md w-full mx-auto mb-3 text-xs text-slate-500 text-center">
+    <section className="max-w-md w-full mx-auto flex-1 flex flex-col">
+      <p className="mb-3 text-xs text-slate-500 text-center">
         {submitted
-          ? 'Submitted. Green rows are correct, red rows are wrong.'
-          : 'Drag the right-column items to align each row with the term on the left, then Submit.'}
+          ? `${correctSoFar} / ${leftCol.length} correct. Green rows are right, red rows are wrong.`
+          : 'Pairs · drag the right column to align each row with the term on the left, then Submit.'}
       </p>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
@@ -182,7 +95,7 @@ export default function Pairs() {
           items={rightCol.map((w) => w.id)}
           strategy={verticalListSortingStrategy}
         >
-          <div className="max-w-md w-full mx-auto flex-1 grid grid-cols-2 gap-2">
+          <div className="flex-1 grid grid-cols-2 gap-2">
             {leftCol.map((leftWord, i) => {
               const right = rightCol[i];
               const isCorrect = submitted && right?.id === leftWord.id;
@@ -208,7 +121,7 @@ export default function Pairs() {
         </SortableContext>
       </DndContext>
 
-      <div className="max-w-md w-full mx-auto mt-4">
+      <div className="mt-4">
         {!submitted ? (
           <button
             type="button"
@@ -227,7 +140,7 @@ export default function Pairs() {
           </button>
         )}
       </div>
-    </main>
+    </section>
   );
 }
 

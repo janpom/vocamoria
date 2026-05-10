@@ -1,15 +1,15 @@
 # Vocabulary Trainer — Spec
 
-A small web app for a school-aged kid to drill custom vocabulary lists. Three games, shared vocab data, shared progress tracking. Optimized for short, daily sessions on phone or laptop.
+A small web app for a school-aged kid to learn a custom vocabulary list to mastery. Optimized for short, daily sessions on phone or laptop.
 
-The app is **language-independent**: any pair of languages works. The primary use case is German for a Czech-speaking kid, but neither language is hardcoded — vocab data and an optional per-list config file drive everything.
+The app is **language-independent**: any pair of languages works. The primary use case is German for a Czech-speaking kid, but neither language is hardcoded — vocab data and an optional per-list config drive everything. In this document the language being learned is `L`, the user's native language is `N`.
 
 ## Goals
 
-- **Replaces** Quizlet for the narrow use case of "drill a custom word list."
-- **Custom word lists**: vocab comes from a JSON file the user edits directly. No login, no backend, no accounts.
-- **Short sessions**: a round takes 2–3 minutes. The kid can do one and stop without guilt.
-- **Visible progress**: per-word mastery tracked across sessions so review actually adapts.
+- **Reach mastery on every word in a custom list.** Goal-driven, not session-driven.
+- **Custom word lists**: vocab comes from a JSON object the user supplies. No login, no backend, no accounts.
+- **App picks the next exercise.** The user just keeps practicing — type and direction are chosen automatically based on overall progress and per-word need.
+- **Visible progress.** A single progress bar from 0% to 100% on the home screen.
 - **Language-agnostic**: nothing in the code assumes German, Czech, or any specific language.
 
 ## Non-goals
@@ -125,155 +125,109 @@ Rules:
 <paste your source material here>
 ```
 
-### Progress state (localStorage key: `vocab-progress`)
+### Practice state (localStorage key: `vocab-practice`)
 
 ```ts
-type Progress = {
-  words: Record<string, WordStats>;
-  streak: { count: number; lastPlayedDate: string }; // YYYY-MM-DD
-  totalXP: number;
+type PracticeState = {
+  words: Record<string, WordMastery>;
 };
 
-type WordStats = {
-  seen: number;          // total times shown
-  correct: number;       // total correct answers
-  lastSeen: string;      // ISO timestamp
-  nextDue: string;       // ISO timestamp — when this word is due again
-  box: number;           // 0..5, Leitner-style box
+type WordMastery = {
+  progress: number;          // 0..1
+  typingNToLStreak: number;  // 0..2 — successful typing N→L attempts in a row, no failed typing N→L in between
+  attempts: number;          // total attempts across all exercises
+  successes: number;         // total successes
 };
 ```
 
-## Spaced repetition (keep it simple)
+There is no Leitner / SRS state. Mastery is driven by direct progress accumulation per exercise outcome.
 
-Leitner boxes, not full SM-2. Each word lives in box 0–5.
+## Mastery model
 
-- New word starts in box 0.
-- Correct answer: `box = min(box + 1, 5)`, set `nextDue` to `now + interval[box]`.
-- Wrong answer: `box = max(box - 1, 0)`, set `nextDue` to `now + 1 day`.
+A word's `progress` is a single number in `[0, 1]`.
 
-Intervals (days): `[0, 1, 3, 7, 14, 30]`. Box 0 means "due immediately."
+- The ultimate goal is **two consecutive successful typing N→L attempts on the same word, with no failed typing N→L in between** (other failures don't reset the streak). When that happens, `progress` snaps to `1.0`.
+- Until then, `progress` accumulates from any exercise, capped at `0.99`. Each exercise outcome moves `progress` by a fixed `EXERCISE_DELTA` for that exercise type, signed by success (+) or failure (−). Floors at 0.
 
-### Word selection per round
+Per-exercise delta magnitudes (success bumps progress, failure subtracts the same amount):
 
-A round is **10 words**. Selection rules, in order:
+| Exercise | Δ | Rank |
+|----------|------|---|
+| pairs | 0.05 | 1 |
+| quiz L→N | 0.08 | 2 |
+| quiz N→L | 0.10 | 3 |
+| hangman L→N | 0.13 | 4 |
+| typing L→N | 0.16 | 5 |
+| hangman N→L | 0.20 | 6 |
+| typing N→L | 0.25 | 7 |
 
-1. Include up to **7 due words** (where `nextDue <= now`), prioritizing oldest `lastSeen` first.
-2. Fill remaining slots with **new words** (never seen).
-3. If still under 10 (small vocab list, all words mastered), fill with random words from the lowest non-empty box.
+Failure on `typing-n-l` after mastery (`progress = 1.0`) resets the streak to 0 and applies the standard Δ penalty, so the word is no longer mastered.
 
-Shuffle the resulting set before presenting.
+**Overall progress** = mean of per-word `progress` across the entire vocab list. Shown on the Home screen and at the top of every Practice screen.
 
-## Mastery labels (for the UI)
+### Mastery labels (for the UI)
 
-Derived from `box`:
-- 0–1: "Learning"
-- 2–3: "Practicing"
-- 4–5: "Mastered"
+Derived from `progress`:
+- `[0.0, 0.6)` → Learning
+- `[0.6, 1.0)` → Practicing
+- `[1.0]` → Mastered
 
-## Games
+## Exercise selection
 
-All three games operate on the **same round** of 10 words selected by the rule above. Player picks the game; word selection and progress tracking are identical across games.
+The Practice screen picks the next `(exerciseType, words)` combination automatically. Two independent weighted samplings:
 
-### Game 0: Pairs (reorder columns)
+1. **Exercise type** — Gaussian centered at the current overall progress, in normalized rank space `(rank - 1) / 6`. So at 0% overall progress, easy exercises (pairs, quiz L→N) dominate; at 50%, mid exercises peak; at 90%, hard exercises (typing N→L, hangman N→L) dominate. Every exercise has a +0.1 floor so nothing has zero weight.
 
-Two visible columns. Left column shows terms in a random fixed order. Right column shows translations in a random order; the user reorders the right column to align row-by-row with the left, then submits.
+   ```
+   weight(t, p) = exp(-((normRank(t) - p)^2) * 8) + 0.1
+   ```
 
-- 8 rows per round (smaller than the standard 10).
-- Drag the right-column cells to reorder them (mouse, touch, or keyboard via dnd-kit's `SortableContext` with PointerSensor + TouchSensor + KeyboardSensor).
-- Left column is read-only.
-- The initial right-column order is reshuffled if it accidentally matches the left, so the user always has at least one swap to make.
-- **Submit** at the bottom locks the answer. Each row is then graded inline: green if `rightCol[i].id === leftCol[i].id`, red otherwise. The Submit button becomes **Continue**, which advances to the round summary.
-- Stats per row:
-  - Correct → recognition recorded (`seen` and `correct` bump, no Leitner box change).
-  - Wrong → `seen` bumps only (`correct`, `box`, and `nextDue` unchanged). Mistakes don't demote the box because the user has both the term and the translation in front of them — getting it wrong is a recognition slip, not a real lapse.
-- Scoring: +10 XP per correct row, +50 XP completion bonus.
-- No direction toggle — both languages are always visible, so flipping wouldn't change the exercise.
+2. **Words** — `1 - progress(w)` with a `0.05` floor, so unmastered words are preferred but mastered words remain selectable for review. Sample without replacement: 1 word for everything except pairs, 8 words for pairs.
 
-### Game 1: Matching
+The `pairs` exercise is excluded from the type pool when the vocab has fewer than 2 words. (`Matching` from earlier versions was removed from the active set per spec; the file is gone, recoverable from git history if needed.)
 
-- Grid of 20 cards (10 terms on the left side, 10 translations on the right, shuffled).
-- Tap a card → it highlights. Tap a second card → check if they're a pair.
-  - Match: cards stay revealed and dim; +1 to that word's `correct`.
-  - No match: brief flash, both flip back; **does not** count as wrong (this is recognition only).
-- When all 10 pairs found: show round summary.
-- Mobile: single column with terms on top half, translations on bottom half also works — pick whichever fits the viewport.
+## Exercises
 
-Scoring: +10 XP per pair, +50 XP completion bonus.
+All exercises return per-word outcomes (`{ wordId, success }[]`) which the Practice orchestrator feeds to `applyExerciseResult`. Exercise components have no awareness of mastery — they just play and report.
 
-### Direction toggle (Quiz and Typing only)
+### Pairs
 
-Each of these two games has an independent **direction** preference, stored in `localStorage` (`quiz-direction`, `typing-direction`). Possible values: `term-to-translation` (the prompt is the term, the answer is the translation) and `translation-to-term` (the inverse).
+Two visible columns. Left column shows terms in a random fixed order. Right column shows translations in a random order; user reorders the right column to align row-by-row, then submits. Drag-and-drop via dnd-kit (PointerSensor + TouchSensor + KeyboardSensor). Initial right order reshuffled if it accidentally matches left.
 
-Defaults: Quiz starts at `term-to-translation` (recognition, easier). Typing starts at `translation-to-term` (production, harder). The Home screen shows the current direction next to each card with a `⇄` swap button.
+After **Submit**, each row is graded green/red. **Continue** reports per-row outcomes to the orchestrator (8 outcomes per exercise).
 
-When typing the **translation** (i.e. `term-to-translation` direction), article-stripping and per-word `alternates` are not applied — they are properties of the source language and don't transfer to the target. Comparison still uses lowercase + trim + Levenshtein ≤ 1 fuzzy match.
+### Quiz (L→N or N→L)
 
-### Game 2: Quiz (multiple choice — the SRS-driven one)
+Prompt at top (term or translation depending on direction); 4 options; tapping correct → green flash + auto-advance after 600 ms; tapping wrong → red flash + the correct answer highlights + manual Next. Distractors come from other words in the vocab (preferring same `lesson` if set), never random strings. Reports a single outcome per exercise.
 
-- Show one prompt at the top (term or translation, depending on direction).
-- Show 4 options on the opposite side of the pair as buttons.
-  - 1 correct.
-  - 3 distractors: pick from other words in the user's vocab list (NOT random strings). Prefer distractors from the same `lesson` tag if present.
-- Tap correct → green flash, +1 to `correct`, advance box, +10 XP. Auto-advance after 600ms.
-- Tap wrong → red flash, the correct answer highlights, demote box. Advance on tap.
-- 10 questions per round, then summary.
+### Typing (L→N or N→L)
 
-This is the workhorse game. Make sure the SRS logic actually fires here — the others are dessert.
+Prompt at top, text input below, Submit (or Enter). Comparison via `checkAnswer`:
 
-Scoring: +10 XP per correct, +50 XP completion bonus, +20 XP for a flawless round.
+- Lowercase, trim, strip trailing punctuation on both sides.
+- Levenshtein ≤ 1 (for targets longer than 4 chars) accepted as "close" — counts as success but shows the correct answer.
+- For `n-l` direction only: strip a leading article from `settings.articlePrefixes` before comparing; accept any string in the per-word `alternates` array.
+- For `l-n` direction: article stripping and `alternates` do not apply (they're source-language features and don't transfer).
 
-### Game 4: Hangman
+Auto-advance on exact correct after 700 ms; manual Next on wrong / close.
 
-- 10 words per round, SRS-driven (same as Quiz / Typing).
-- Direction toggle on Home (`hangman-direction`, defaults to `translation-to-term`).
-- Layout: prompt at the top (the side that's *not* being guessed); below it, the target word rendered cell-by-cell with hidden letters as an underline placeholder; on-screen A–Z keyboard at the bottom.
-- Spaces, punctuation, and digits in the target are pre-revealed — only Unicode letters need to be guessed.
-- Letter matching is **case-insensitive and accent-insensitive**: tapping `O` reveals all of `o`, `O`, `ö`, `Ö`, `ó`, `Ó`, etc. Internally each character is normalized via `lowercase + stripAccents` (NFD then drop combining marks).
-- 1 mistake allowed; the 2nd mistake fails the word. On a miss the letter button turns red; on a hit it turns green.
-- Win → green flash, +1 to `correct`, advance box, +10 XP, auto-advance after 900 ms.
-- Loss → red label, full word revealed (the missing letters tinted red so you can see what you missed), Next button to advance, demote box.
-- Scoring: same as Quiz (+10 per correct, +50 completion, +20 flawless).
+### Hangman (L→N or N→L)
 
-### Game 3: Typing
+Prompt at top, target rendered cell-by-cell with hidden letters as underline placeholders, on-screen A–Z keyboard at the bottom, plus physical keyboard input. Spaces, punctuation, digits pre-revealed (only Unicode `\p{L}` is guessable). Word-aware wrapping: each space-separated word is its own no-wrap group, only inter-word spaces wrap.
 
-- Show the prompt at the top — by default the **translation** (e.g. "pes"), or the **term** if direction is flipped.
-- Text input below, "Submit" button or Enter to submit.
-- Compare answer to the opposite field after normalization. The rules below describe the default `translation-to-term` direction; in the flipped direction, article-stripping and `alternates` do not apply (they are source-language features).
-  - Lowercase both sides.
-  - Trim whitespace and trailing punctuation.
-  - If `settings.articlePrefixes` is non-empty, strip a leading article token from both sides before comparing (e.g. given prefixes `["der","die","das"]` and term `"der Hund"`, accept both `"der hund"` and `"hund"`).
-  - Accept any string in the optional `alternates` array.
-  - Optional nicety: accept Levenshtein distance ≤ 1 for words longer than 4 chars (counts as correct but show a small "Close — correct: *Hund*" note).
-- Wrong → show correct answer, "Next" button.
-- 10 questions per round.
+Letter matching is **case- and accent-insensitive**: `O` reveals every `o/O/ö/Ö/ó/Ó` in the target. Internally normalized via `lowercase + stripAccents` (NFD then drop combining marks `\p{M}`).
 
-Scoring: same as Quiz.
-
-## Round summary screen
-
-After each round, show:
-- Score this round (e.g. "8/10").
-- XP earned.
-- Streak status — "Day 4 🔥" — increment on first round of a calendar day.
-- List of words missed this round, with term + translation, so the kid can glance at them.
-- Two buttons: "Play again" and "Home".
-
-## Streak logic
-
-- A "day" is a calendar day in the user's local timezone.
-- First completed round of a day: increment streak, update `lastPlayedDate`.
-- If `lastPlayedDate` is more than 1 day ago when a round completes: reset streak to 1.
-- If same day as `lastPlayedDate`: streak unchanged.
+1 mistake allowed; 2nd mistake fails the word. Win → green flash + auto-advance after 900 ms. Loss → reveal full word with missing letters tinted red, Next to advance.
 
 ## Home screen
 
-- Streak indicator (big, top of screen).
-- Total XP.
-- Three big tappable cards: "Matching", "Quiz", "Typing".
-- Small "Words" link → list view of all vocab with mastery labels and per-word stats.
-- Settings cog → "Import vocab" (re-open Import screen), "Reset progress" (with confirmation), "Reset vocab" (with confirmation), "Lesson filter" (if `lesson` tags are used).
+- Title.
+- Mastered count (e.g. `13 / 50 words mastered`).
+- **Progress bar** filling 0% → 100% based on overall progress.
+- One big **Practice** button → `/practice`.
+- Footer links: Words (list view), Settings.
 
-If no vocab is loaded (`localStorage` key `vocab-list` empty), Home redirects to the Import screen and the game cards are not reachable.
+If no vocab is loaded (`vocab-list` empty), Home redirects to the Import screen.
 
 ## Import screen
 
@@ -293,9 +247,9 @@ If no vocab is loaded (`localStorage` key `vocab-list` empty), Home redirects to
 
 ## Out of scope (note for v2)
 
-- Audio via Web Speech API (`new SpeechSynthesisUtterance(word); u.lang = '<lang>'` — language read from `settings`).
-- Falling-words / asteroids game.
+- Audio via Web Speech API.
 - Direct CSV / image / file upload on the Import screen (v1 is paste-only — the AI step does the parsing).
 - Multiple named word lists / per-chapter progress.
 - Export/backup of progress and vocab as a JSON file.
 - UI localization.
+- Streaks, XP, and other engagement metrics layered on top of the progress bar.
