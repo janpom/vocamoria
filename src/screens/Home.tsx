@@ -55,6 +55,7 @@ export default function Home() {
 
         <div className="space-y-3">
           <SimpleCard label="Matching" to="/matching" />
+          <SimpleCard label="Pairs" to="/pairs" />
           <DirectionCard
             label="Quiz"
             to="/quiz"

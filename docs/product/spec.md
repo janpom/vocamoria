@@ -174,6 +174,19 @@ Derived from `box`:
 
 All three games operate on the **same round** of 10 words selected by the rule above. Player picks the game; word selection and progress tracking are identical across games.
 
+### Game 0: Pairs (visible columns)
+
+Two columns of words, both fully visible. Left column shows terms; right column shows translations. Independently shuffled.
+
+- 8 words per round (smaller than the standard 10).
+- Tap a word in either column → it highlights.
+- Tap a word in the opposite column → if they match, both turn green and dim; if not, both flash red briefly and the selection clears.
+- Tapping a second word on the same side replaces the selection.
+- Recognition-only stats (same as Matching): bumps `seen` and `correct`, no Leitner box change.
+- Round ends when all 8 pairs are matched.
+- Scoring: +10 XP per pair, +50 XP completion bonus.
+- No direction toggle — both languages are always visible, so flipping wouldn't change the exercise.
+
 ### Game 1: Matching
 
 - Grid of 20 cards (10 terms on the left side, 10 translations on the right, shuffled).
