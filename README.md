@@ -15,6 +15,16 @@ npm run dev
 
 Open the URL Vite prints. First load redirects to the **Import** screen — copy the prompt, give it to an AI together with your source material, paste the resulting JSON back, and you're playing.
 
+## Sharing a word list
+
+Append `?vocab=<url-to-json>` to the app URL to load a vocab list from anywhere on the web:
+
+```
+https://janpom.github.io/vocamoria/?vocab=https://gist.githubusercontent.com/USER/ID/raw/vocab.json
+```
+
+Replaces the local vocab list (per-word progress is preserved). The host must serve the JSON with permissive CORS headers — **GitHub Gist raw URLs** and most JSON-paste services work; **Google Drive direct links** and pastebin.com do not.
+
 ## Scripts
 
 | Script | Purpose |

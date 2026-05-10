@@ -1,8 +1,13 @@
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { loadProgress } from '../lib/progress';
 import { loadVocab } from '../lib/vocab';
+import RemoteLoader from './RemoteLoader';
 
 export default function Home() {
+  const [params] = useSearchParams();
+  const remoteUrl = params.get('vocab');
+  if (remoteUrl) return <RemoteLoader url={remoteUrl} />;
+
   const vocab = loadVocab(localStorage);
   const progress = loadProgress(localStorage);
 

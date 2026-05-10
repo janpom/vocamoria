@@ -32,6 +32,20 @@ Vocab is **not bundled with the app**. The user supplies it at runtime by import
 
 A user can re-import at any time. Re-importing **merges by `id`** (preserves existing progress for words whose `id` is unchanged; adds new words; does not auto-remove omitted words — explicit "Remove word" is a Settings action).
 
+### Loading vocab from a URL (shareable links)
+
+The Home route accepts a `?vocab=<url>` query parameter. When present, the app fetches the URL, validates the response against the vocab schema, **replaces** the local vocab list, and redirects to `/`. Per-word progress (keyed by `id` in a separate `localStorage` slot) is preserved across the replace.
+
+Example:
+
+```
+https://janpom.github.io/vocamoria/?vocab=https://gist.githubusercontent.com/<user>/<id>/raw/vocab.json
+```
+
+This is the primary way to share a specific word list with someone — host the JSON on any service that serves raw text with permissive CORS headers (GitHub Gist raw URLs work; Google Drive direct links and most pastebin services do not), then send the link.
+
+The URL is fetched once per visit and not cached separately — visiting the bare `/` after a successful load uses the local copy. Errors (bad URL, fetch failure, schema violation) render a dedicated error screen with Retry and "Import manually" buttons.
+
 ### Vocab schema
 
 ```json
