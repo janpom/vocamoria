@@ -26,7 +26,7 @@ export default function Home() {
 
         <div className="space-y-3">
           <GameCard label="Matching" />
-          <GameCard label="Quiz" />
+          <GameCard label="Quiz" to="/quiz" />
           <GameCard label="Typing" />
         </div>
 
@@ -41,12 +41,21 @@ export default function Home() {
   );
 }
 
-function GameCard({ label }: { label: string }) {
+function GameCard({ label, to }: { label: string; to?: string }) {
+  const className =
+    'w-full py-6 rounded-2xl bg-white shadow-sm text-2xl font-semibold text-sky-700 transition active:scale-[0.98] block text-center';
+  if (to) {
+    return (
+      <Link to={to} className={className}>
+        {label}
+      </Link>
+    );
+  }
   return (
     <button
       type="button"
       disabled
-      className="w-full py-6 rounded-2xl bg-white shadow-sm text-2xl font-semibold text-sky-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+      className={`${className} opacity-60 cursor-not-allowed`}
     >
       {label}
       <span className="block text-xs font-normal text-slate-500 mt-1">coming soon</span>
