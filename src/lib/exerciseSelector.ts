@@ -9,6 +9,7 @@ import {
   progressOf,
   streakOf,
 } from './mastery';
+// progressOf is kept in scope for wordWeight (anchor selection).
 import { USER_SKILL_DEFAULT, type PracticeState, userSkillOf } from './practice';
 import type { Vocab, Word } from './types';
 
@@ -18,21 +19,17 @@ export const TYPE_WEIGHT_MULTIPLIER: Partial<Record<ExerciseType, number>> = {
   pairs: 0.5,
 };
 
-export const SKILL_BLEND_WEIGHT = 0.7;
 export const PROMOTION_SKILL_THRESHOLD = 0.5;
-
-export function difficultyCenter(mastery: WordMastery, userSkill: number): number {
-  return (1 - SKILL_BLEND_WEIGHT) * progressOf(mastery) + SKILL_BLEND_WEIGHT * userSkill;
-}
+export const GAUSSIAN_SHARPNESS = 100;
+export const WEIGHT_FLOOR = 0.01;
 
 export function exerciseWeight(
   exType: ExerciseType,
-  mastery: WordMastery,
   userSkill: number = USER_SKILL_DEFAULT,
 ): number {
   const normRank = (EXERCISE_RANK[exType] - 1) / (EXERCISE_TYPES.length - 1);
-  const center = difficultyCenter(mastery, userSkill);
-  const base = Math.exp(-Math.pow(normRank - center, 2) * 8) + 0.1;
+  const distance = normRank - userSkill;
+  const base = Math.exp(-distance * distance * GAUSSIAN_SHARPNESS) + WEIGHT_FLOOR;
   return base * (TYPE_WEIGHT_MULTIPLIER[exType] ?? 1);
 }
 
@@ -74,7 +71,7 @@ export function chooseTypeForWord(
     // enough; cold-streak users get the gentler Gaussian fallback.
     if (isPromoted(m) && userSkill >= PROMOTION_SKILL_THRESHOLD) return 'typing-n-l';
   }
-  const weights = eligible.map((t) => exerciseWeight(t, m, userSkill));
+  const weights = eligible.map((t) => exerciseWeight(t, userSkill));
   return eligible[weightedSampleIndex(weights, random)];
 }
 

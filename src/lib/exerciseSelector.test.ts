@@ -34,21 +34,28 @@ describe('eligibleExercises', () => {
 });
 
 describe('exerciseWeight', () => {
-  it('peaks at the easy end for a fresh word', () => {
-    const w = (t: ExerciseType) => exerciseWeight(t, emptyWordMastery());
-    expect(w('quiz-l-n')).toBeGreaterThan(w('typing-n-l'));
-  });
-
   it('uses normalized rank position', () => {
     const ranks = Object.values(EXERCISE_RANK);
     expect(Math.min(...ranks)).toBe(1);
     expect(Math.max(...ranks)).toBe(7);
   });
 
-  it('applies the pairs multiplier so pairs is half its peak weight', () => {
-    expect(exerciseWeight('pairs', emptyWordMastery())).toBeLessThan(
-      exerciseWeight('quiz-l-n', emptyWordMastery()),
-    );
+  it('peaks at typing-n-l when userSkill is 1', () => {
+    const total = EXERCISE_TYPES.reduce((acc, t) => acc + exerciseWeight(t, 1), 0);
+    const tnlShare = exerciseWeight('typing-n-l', 1) / total;
+    expect(tnlShare).toBeGreaterThan(0.85);
+  });
+
+  it('peaks at pairs when userSkill is 0', () => {
+    const total = EXERCISE_TYPES.reduce((acc, t) => acc + exerciseWeight(t, 0), 0);
+    const pairsShare = exerciseWeight('pairs', 0) / total;
+    expect(pairsShare).toBeGreaterThan(0.7);
+  });
+
+  it('applies the pairs multiplier (peak halved)', () => {
+    // At a userSkill matching pairs (0), pairs peak is halved by the multiplier.
+    // Compare pairs at its peak vs quiz-l-n at its own peak (skill matching its rank).
+    expect(exerciseWeight('pairs', 0)).toBeLessThan(exerciseWeight('quiz-l-n', 0.167));
   });
 });
 
@@ -99,17 +106,24 @@ describe('chooseTypeForWord', () => {
     expect(seen.size).toBeGreaterThan(1);
   });
 
-  it('hot user shifts the Gaussian toward harder for a fresh word', () => {
-    // With a hot user, typing-n-l should be substantially more likely on a
-    // 0/0 word than with a cold user.
-    let hotPicks = 0;
-    let coldPicks = 0;
-    for (let i = 0; i < 200; i++) {
-      const r = (n: number) => () => n / 200;
-      if (chooseTypeForWord(emptyWordMastery(), eligible, 0.95, r(i)) === 'typing-n-l') hotPicks++;
-      if (chooseTypeForWord(emptyWordMastery(), eligible, 0.05, r(i)) === 'typing-n-l') coldPicks++;
+  it('hot user picks typing-n-l almost always for a fresh word', () => {
+    let typingNLPicks = 0;
+    const trials = 200;
+    for (let i = 0; i < trials; i++) {
+      const r = () => i / trials;
+      if (chooseTypeForWord(emptyWordMastery(), eligible, 1.0, r) === 'typing-n-l') typingNLPicks++;
     }
-    expect(hotPicks).toBeGreaterThan(coldPicks * 3);
+    expect(typingNLPicks / trials).toBeGreaterThan(0.85);
+  });
+
+  it('cold user picks pairs almost always for a fresh word', () => {
+    let pairsPicks = 0;
+    const trials = 200;
+    for (let i = 0; i < trials; i++) {
+      const r = () => i / trials;
+      if (chooseTypeForWord(emptyWordMastery(), eligible, 0.0, r) === 'pairs') pairsPicks++;
+    }
+    expect(pairsPicks / trials).toBeGreaterThan(0.7);
   });
 });
 

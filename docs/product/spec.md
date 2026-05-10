@@ -190,12 +190,11 @@ The Practice screen picks the next `(exerciseType, words)` automatically. **Pick
 2. **Exercise type** — three-tier:
    - **Always close out a typing-n-l streak**: when `streak[typing-n-l] === 1` for the anchor, force typing-n-l (only path to mastery, regardless of how the user is doing).
    - **Promoted + warm user**: when the anchor is promoted AND `userSkill >= 0.5`, force typing-n-l. A cold user (struggling lately) doesn't get pushed — they fall through to the Gaussian.
-   - **Otherwise**: weighted random by Gaussian centered on a **blend of the anchor's progress and the user's recent skill**:
+   - **Otherwise**: weighted random by a **sharp Gaussian centered on `userSkill` alone**:
      ```
-     center = 0.3 * progressOf(anchor) + 0.7 * userSkill
-     typeWeight(t) = (exp(-((normRank(t) - center)^2) * 8) + 0.1) * multiplier(t)
+     typeWeight(t) = (exp(-((normRank(t) - userSkill)^2) * 100) + 0.01) * multiplier(t)
      ```
-     The `× 0.5` multiplier on `pairs` slows it down (tedious for low per-step gain). All other types have no multiplier.
+     The Gaussian is narrow (sharpness 100, floor 0.01), so `userSkill` dominates the difficulty pick. At `userSkill = 1.0` the result is typing-n-l roughly 90% of the time; at `userSkill = 0.0` it's pairs roughly 80%. The `× 0.5` multiplier on `pairs` slows it down (tedious for low per-step gain). The per-word progress doesn't enter the type Gaussian — it's already controlling *which* word is picked. The deterministic typing-n-l rules above are what graduate words to mastery, the Gaussian here is for the rest.
 
 `userSkill` is the **mean of the last 5 exercise scores** (a sliding window, `RECENT_WINDOW = 5`). Each completed exercise contributes one score: `1.0` for a single-question success, `0.0` for a failure, and `correctRows / totalRows` for a pairs round. Missing slots (fewer than 5 exercises played) are padded with the neutral `0.5`. Persisted in `vocab-practice` as `recentScores: number[]`.
 
