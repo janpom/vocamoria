@@ -174,17 +174,19 @@ Derived from `box`:
 
 All three games operate on the **same round** of 10 words selected by the rule above. Player picks the game; word selection and progress tracking are identical across games.
 
-### Game 0: Pairs (visible columns)
+### Game 0: Pairs (reorder columns)
 
-Two columns of words, both fully visible. Left column shows terms; right column shows translations. Independently shuffled.
+Two visible columns. Left column shows terms in a random fixed order. Right column shows translations in a random order; the user reorders the right column to align row-by-row with the left, then submits.
 
-- 8 words per round (smaller than the standard 10).
-- Tap a word in either column → it highlights.
-- Tap a word in the opposite column → if they match, both turn green and dim; if not, both flash red briefly and the selection clears.
-- Tapping a second word on the same side replaces the selection.
-- Recognition-only stats (same as Matching): bumps `seen` and `correct`, no Leitner box change.
-- Round ends when all 8 pairs are matched.
-- Scoring: +10 XP per pair, +50 XP completion bonus.
+- 8 rows per round (smaller than the standard 10).
+- Tap a cell in the right column → it highlights ("picked up"). Tap another right-column cell → the two swap. Tap the picked cell again to clear the selection.
+- Left column is read-only.
+- The initial right-column order is reshuffled if it accidentally matches the left, so the user always has at least one swap to make.
+- **Submit** at the bottom locks the answer. Each row is then graded inline: green if `rightCol[i].id === leftCol[i].id`, red otherwise. The Submit button becomes **Continue**, which advances to the round summary.
+- Stats per row:
+  - Correct → recognition recorded (`seen` and `correct` bump, no Leitner box change).
+  - Wrong → `seen` bumps only (`correct`, `box`, and `nextDue` unchanged). Mistakes don't demote the box because the user has both the term and the translation in front of them — getting it wrong is a recognition slip, not a real lapse.
+- Scoring: +10 XP per correct row, +50 XP completion bonus.
 - No direction toggle — both languages are always visible, so flipping wouldn't change the exercise.
 
 ### Game 1: Matching
