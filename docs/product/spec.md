@@ -62,6 +62,7 @@ The URL is fetched once per visit and not cached separately — visiting the bar
 
 **`settings`** (optional, may be omitted entirely):
 - `articlePrefixes`: array of leading tokens that are stripped during answer normalization in typing mode (e.g. German articles, Spanish `el`/`la`, French `le`/`la`/`les`). Default: `[]` (no stripping).
+- `sourceLang`, `targetLang`: optional short English names of the two languages (e.g. `"German"`, `"Czech"`). Used as labels on the Home screen direction toggle and in error messages. If omitted, the app falls back to the language fields the user typed on the Import screen, then to literal `"Term"` / `"Translation"`.
 
 **`words`** entries:
 - `id`: stable string, used as key for progress tracking. Must be unique. Lowercase ASCII, no spaces.
@@ -184,10 +185,18 @@ All three games operate on the **same round** of 10 words selected by the rule a
 
 Scoring: +10 XP per pair, +50 XP completion bonus.
 
+### Direction toggle (Quiz and Typing only)
+
+Each of these two games has an independent **direction** preference, stored in `localStorage` (`quiz-direction`, `typing-direction`). Possible values: `term-to-translation` (the prompt is the term, the answer is the translation) and `translation-to-term` (the inverse).
+
+Defaults: Quiz starts at `term-to-translation` (recognition, easier). Typing starts at `translation-to-term` (production, harder). The Home screen shows the current direction next to each card with a `⇄` swap button.
+
+When typing the **translation** (i.e. `term-to-translation` direction), article-stripping and per-word `alternates` are not applied — they are properties of the source language and don't transfer to the target. Comparison still uses lowercase + trim + Levenshtein ≤ 1 fuzzy match.
+
 ### Game 2: Quiz (multiple choice — the SRS-driven one)
 
-- Show one term at the top.
-- Show 4 translation options as buttons.
+- Show one prompt at the top (term or translation, depending on direction).
+- Show 4 options on the opposite side of the pair as buttons.
   - 1 correct.
   - 3 distractors: pick from other words in the user's vocab list (NOT random strings). Prefer distractors from the same `lesson` tag if present.
 - Tap correct → green flash, +1 to `correct`, advance box, +10 XP. Auto-advance after 600ms.
@@ -200,9 +209,9 @@ Scoring: +10 XP per correct, +50 XP completion bonus, +20 XP for a flawless roun
 
 ### Game 3: Typing
 
-- Show the **translation** at the top (e.g. "pes").
+- Show the prompt at the top — by default the **translation** (e.g. "pes"), or the **term** if direction is flipped.
 - Text input below, "Submit" button or Enter to submit.
-- Compare answer to `term` field after normalization:
+- Compare answer to the opposite field after normalization. The rules below describe the default `translation-to-term` direction; in the flipped direction, article-stripping and `alternates` do not apply (they are source-language features).
   - Lowercase both sides.
   - Trim whitespace and trailing punctuation.
   - If `settings.articlePrefixes` is non-empty, strip a leading article token from both sides before comparing (e.g. given prefixes `["der","die","das"]` and term `"der Hund"`, accept both `"der hund"` and `"hund"`).

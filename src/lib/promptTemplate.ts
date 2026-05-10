@@ -24,12 +24,20 @@ Also produce a top-level "settings" object:
   that a learner might omit when typing (e.g. ["der","die","das"] for German,
   ["el","la","los","las"] for Spanish, ["le","la","les"] for French). Use []
   if the language has no such articles or it does not apply.
+- "sourceLang": the source language as a short English name (e.g. "German",
+  "Spanish") — use the value from above.
+- "targetLang": the translation language as a short English name (e.g.
+  "Czech", "English") — use the value from above.
 
 Output exactly one JSON object and nothing else — no prose, no markdown
 fences, no commentary. Schema:
 
 {
-  "settings": { "articlePrefixes": [...] },
+  "settings": {
+    "articlePrefixes": [...],
+    "sourceLang": "...",
+    "targetLang": "..."
+  },
   "words": [
     { "id": "...", "term": "...", "translation": "..." }
   ]

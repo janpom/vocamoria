@@ -28,6 +28,24 @@ describe('validateVocab', () => {
     expect(v.settings.articlePrefixes).toEqual(['der', 'die', 'das']);
   });
 
+  it('keeps sourceLang and targetLang when provided', () => {
+    const v = validateVocab({
+      ...minimal,
+      settings: { articlePrefixes: [], sourceLang: 'German', targetLang: 'Czech' },
+    });
+    expect(v.settings.sourceLang).toBe('German');
+    expect(v.settings.targetLang).toBe('Czech');
+  });
+
+  it('drops sourceLang/targetLang that are not non-empty strings', () => {
+    const v = validateVocab({
+      ...minimal,
+      settings: { articlePrefixes: [], sourceLang: '   ', targetLang: 42 },
+    });
+    expect(v.settings.sourceLang).toBeUndefined();
+    expect(v.settings.targetLang).toBeUndefined();
+  });
+
   it('preserves optional lesson and alternates', () => {
     const v = validateVocab({
       words: [

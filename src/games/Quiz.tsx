@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { buildOptions } from '../lib/distractors';
+import { getDirection } from '../lib/preferences';
 import { applyRoundResult, loadProgress, saveProgress } from '../lib/progress';
 import { selectRound } from '../lib/selection';
 import { newWordStats, recordCorrect, recordWrong } from '../lib/srs';
@@ -41,11 +42,16 @@ export default function Quiz() {
   const navigate = useNavigate();
   const vocab = useMemo(() => loadVocab(localStorage), []);
   const startingProgress = useMemo(() => loadProgress(localStorage), []);
+  const direction = useMemo(() => getDirection('quiz', localStorage), []);
   const round = useMemo(
     () => selectRound(vocab, startingProgress, new Date()),
     [vocab, startingProgress],
   );
   const questions = useMemo(() => buildQuestions(round, vocab.words), [round, vocab.words]);
+
+  const promptOf = (w: Word) => (direction === 'term-to-translation' ? w.term : w.translation);
+  const optionTextOf = (w: Word) =>
+    direction === 'term-to-translation' ? w.translation : w.term;
 
   const [idx, setIdx] = useState(0);
   const [results, setResults] = useState<RoundResult[]>([]);
@@ -157,7 +163,7 @@ export default function Quiz() {
       <section className="max-w-md w-full mx-auto flex-1 flex flex-col">
         <div className="text-center mb-8 mt-4">
           <div className="text-sm text-slate-500 mb-2">Translate</div>
-          <div className="text-4xl font-bold">{current.word.term}</div>
+          <div className="text-4xl font-bold">{promptOf(current.word)}</div>
         </div>
 
         <div className="space-y-3 flex-1">
@@ -181,7 +187,7 @@ export default function Quiz() {
                 disabled={phase.kind !== 'asking'}
                 className={`${baseStyle} ${stateStyle} disabled:cursor-default`}
               >
-                {opt.translation}
+                {optionTextOf(opt)}
               </button>
             );
           })}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { checkAnswer } from '../lib/normalize';
+import { getDirection } from '../lib/preferences';
 import { applyRoundResult, loadProgress, saveProgress } from '../lib/progress';
 import { selectRound } from '../lib/selection';
 import { newWordStats, recordCorrect, recordWrong } from '../lib/srs';
@@ -32,6 +33,7 @@ export default function Typing() {
   const navigate = useNavigate();
   const vocab = useMemo(() => loadVocab(localStorage), []);
   const startingProgress = useMemo(() => loadProgress(localStorage), []);
+  const direction = useMemo(() => getDirection('typing', localStorage), []);
   const round = useMemo(
     () => selectRound(vocab, startingProgress, new Date()),
     [vocab, startingProgress],
@@ -119,12 +121,19 @@ export default function Typing() {
     }
   };
 
+  const promptText =
+    direction === 'translation-to-term' ? current.translation : current.term;
+  const expectedText = direction === 'translation-to-term' ? current.term : current.translation;
+  const expectedAlternates = direction === 'translation-to-term' ? current.alternates ?? [] : [];
+  const checkOpts =
+    direction === 'translation-to-term'
+      ? { articlePrefixes: vocab.settings.articlePrefixes }
+      : { articlePrefixes: [] };
+
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (phase.kind !== 'asking' || !input.trim()) return;
-    const result = checkAnswer(input, current.term, current.alternates ?? [], {
-      articlePrefixes: vocab.settings.articlePrefixes,
-    });
+    const result = checkAnswer(input, expectedText, expectedAlternates, checkOpts);
     const newResults = [...results, { word: current, correct: result.correct }];
     setResults(newResults);
     setPhase({
@@ -156,8 +165,8 @@ export default function Typing() {
 
       <section className="max-w-md w-full mx-auto flex-1 flex flex-col">
         <div className="text-center mb-8 mt-4">
-          <div className="text-sm text-slate-500 mb-2">Type in the original language</div>
-          <div className="text-4xl font-bold">{current.translation}</div>
+          <div className="text-sm text-slate-500 mb-2">Type the translation</div>
+          <div className="text-4xl font-bold">{promptText}</div>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-3">
@@ -200,12 +209,12 @@ export default function Typing() {
             )}
             {phase.correct && phase.close && (
               <div className="text-center text-amber-700">
-                Close — correct: <strong>{current.term}</strong>
+                Close — correct: <strong>{expectedText}</strong>
               </div>
             )}
             {!phase.correct && (
               <div className="text-center text-rose-700">
-                Correct answer: <strong>{current.term}</strong>
+                Correct answer: <strong>{expectedText}</strong>
               </div>
             )}
             {!(phase.correct && !phase.close) && (

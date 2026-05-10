@@ -15,6 +15,11 @@ describe('DEFAULT_PROMPT_TEMPLATE', () => {
   it('asks for strict JSON output (no markdown fences)', () => {
     expect(DEFAULT_PROMPT_TEMPLATE).toMatch(/no markdown\s+fences/);
   });
+
+  it('asks for sourceLang and targetLang in settings', () => {
+    expect(DEFAULT_PROMPT_TEMPLATE).toMatch(/sourceLang/);
+    expect(DEFAULT_PROMPT_TEMPLATE).toMatch(/targetLang/);
+  });
 });
 
 describe('renderPrompt', () => {

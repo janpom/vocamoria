@@ -78,6 +78,12 @@ function parseSettings(raw: unknown): VocabSettings {
         .map((x) => x.trim())
         .filter(Boolean);
     }
+    if (typeof s.sourceLang === 'string' && s.sourceLang.trim()) {
+      settings.sourceLang = s.sourceLang.trim();
+    }
+    if (typeof s.targetLang === 'string' && s.targetLang.trim()) {
+      settings.targetLang = s.targetLang.trim();
+    }
   }
   return settings;
 }

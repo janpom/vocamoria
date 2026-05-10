@@ -8,6 +8,8 @@ export type Word = {
 
 export type VocabSettings = {
   articlePrefixes: string[];
+  sourceLang?: string;
+  targetLang?: string;
 };
 
 export type Vocab = {
