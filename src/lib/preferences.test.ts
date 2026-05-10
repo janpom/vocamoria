@@ -17,6 +17,7 @@ describe('getDirection', () => {
     const s = memStorage();
     expect(getDirection('quiz', s)).toBe('term-to-translation');
     expect(getDirection('typing', s)).toBe('translation-to-term');
+    expect(getDirection('hangman', s)).toBe('translation-to-term');
   });
 
   it('returns the stored value when set', () => {

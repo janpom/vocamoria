@@ -222,6 +222,18 @@ This is the workhorse game. Make sure the SRS logic actually fires here — the 
 
 Scoring: +10 XP per correct, +50 XP completion bonus, +20 XP for a flawless round.
 
+### Game 4: Hangman
+
+- 10 words per round, SRS-driven (same as Quiz / Typing).
+- Direction toggle on Home (`hangman-direction`, defaults to `translation-to-term`).
+- Layout: prompt at the top (the side that's *not* being guessed); below it, the target word rendered cell-by-cell with hidden letters as an underline placeholder; on-screen A–Z keyboard at the bottom.
+- Spaces, punctuation, and digits in the target are pre-revealed — only Unicode letters need to be guessed.
+- Letter matching is **case-insensitive and accent-insensitive**: tapping `O` reveals all of `o`, `O`, `ö`, `Ö`, `ó`, `Ó`, etc. Internally each character is normalized via `lowercase + stripAccents` (NFD then drop combining marks).
+- 1 mistake allowed; the 2nd mistake fails the word. On a miss the letter button turns red; on a hit it turns green.
+- Win → green flash, +1 to `correct`, advance box, +10 XP, auto-advance after 900 ms.
+- Loss → red label, full word revealed (the missing letters tinted red so you can see what you missed), Next button to advance, demote box.
+- Scoring: same as Quiz (+10 per correct, +50 completion, +20 flawless).
+
 ### Game 3: Typing
 
 - Show the prompt at the top — by default the **translation** (e.g. "pes"), or the **term** if direction is flipped.

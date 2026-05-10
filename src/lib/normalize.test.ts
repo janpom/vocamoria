@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { checkAnswer, levenshtein, normalize } from './normalize';
+import {
+  checkAnswer,
+  isGuessableLetter,
+  lettersEqual,
+  levenshtein,
+  normalize,
+  normalizeLetter,
+  stripAccents,
+} from './normalize';
 
 describe('normalize', () => {
   it('lowercases and trims', () => {
@@ -46,6 +54,60 @@ describe('levenshtein', () => {
   it('handles empty strings', () => {
     expect(levenshtein('', 'abc')).toBe(3);
     expect(levenshtein('abc', '')).toBe(3);
+  });
+});
+
+describe('stripAccents', () => {
+  it.each([
+    ['café', 'cafe'],
+    ['Über', 'Uber'],
+    ['naïve', 'naive'],
+    ['čeština', 'cestina'],
+    ['São Paulo', 'Sao Paulo'],
+    ['hund', 'hund'],
+  ])('strips accents from %s -> %s', (input, expected) => {
+    expect(stripAccents(input)).toBe(expected);
+  });
+});
+
+describe('normalizeLetter / lettersEqual', () => {
+  it('matches case-insensitively', () => {
+    expect(lettersEqual('o', 'O')).toBe(true);
+    expect(lettersEqual('A', 'a')).toBe(true);
+  });
+
+  it('matches across accents in either direction', () => {
+    expect(lettersEqual('o', 'Ö')).toBe(true);
+    expect(lettersEqual('Ö', 'o')).toBe(true);
+    expect(lettersEqual('c', 'č')).toBe(true);
+    expect(lettersEqual('Č', 'c')).toBe(true);
+  });
+
+  it('does not match unrelated letters', () => {
+    expect(lettersEqual('o', 'a')).toBe(false);
+    expect(lettersEqual('ö', 'a')).toBe(false);
+  });
+
+  it('normalizeLetter is the canonical form', () => {
+    expect(normalizeLetter('Ö')).toBe('o');
+    expect(normalizeLetter('Č')).toBe('c');
+  });
+});
+
+describe('isGuessableLetter', () => {
+  it('returns true for any Unicode letter', () => {
+    expect(isGuessableLetter('a')).toBe(true);
+    expect(isGuessableLetter('Z')).toBe(true);
+    expect(isGuessableLetter('ö')).toBe(true);
+    expect(isGuessableLetter('č')).toBe(true);
+  });
+
+  it('returns false for spaces, punctuation, digits', () => {
+    expect(isGuessableLetter(' ')).toBe(false);
+    expect(isGuessableLetter('-')).toBe(false);
+    expect(isGuessableLetter("'")).toBe(false);
+    expect(isGuessableLetter('.')).toBe(false);
+    expect(isGuessableLetter('1')).toBe(false);
   });
 });
 

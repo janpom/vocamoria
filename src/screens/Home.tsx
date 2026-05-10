@@ -22,6 +22,9 @@ export default function Home() {
   const labels = useMemo(() => readLabels(vocab, localStorage), [vocab]);
   const [quizDir, setQuizDir] = useState<Direction>(() => getDirection('quiz', localStorage));
   const [typingDir, setTypingDir] = useState<Direction>(() => getDirection('typing', localStorage));
+  const [hangmanDir, setHangmanDir] = useState<Direction>(() =>
+    getDirection('hangman', localStorage),
+  );
 
   if (vocab.words.length === 0) {
     return <Navigate to="/import" replace />;
@@ -31,7 +34,8 @@ export default function Home() {
     const next = flipDirection(current);
     setDirection(game, next, localStorage);
     if (game === 'quiz') setQuizDir(next);
-    else setTypingDir(next);
+    else if (game === 'typing') setTypingDir(next);
+    else setHangmanDir(next);
   };
 
   const directionLabel = (d: Direction) =>
@@ -67,6 +71,12 @@ export default function Home() {
             to="/typing"
             directionLabel={directionLabel(typingDir)}
             onSwap={() => toggle('typing', typingDir)}
+          />
+          <DirectionCard
+            label="Hangman"
+            to="/hangman"
+            directionLabel={directionLabel(hangmanDir)}
+            onSwap={() => toggle('hangman', hangmanDir)}
           />
         </div>
 

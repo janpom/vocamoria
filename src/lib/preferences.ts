@@ -1,14 +1,16 @@
 export type Direction = 'term-to-translation' | 'translation-to-term';
-export type DirectionGame = 'quiz' | 'typing';
+export type DirectionGame = 'quiz' | 'typing' | 'hangman';
 
 const KEYS: Record<DirectionGame, string> = {
   quiz: 'quiz-direction',
   typing: 'typing-direction',
+  hangman: 'hangman-direction',
 };
 
 const DEFAULTS: Record<DirectionGame, Direction> = {
   quiz: 'term-to-translation',
   typing: 'translation-to-term',
+  hangman: 'translation-to-term',
 };
 
 function isDirection(s: string | null): s is Direction {

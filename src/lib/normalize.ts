@@ -61,3 +61,19 @@ export function checkAnswer(
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+export function stripAccents(s: string): string {
+  return s.normalize('NFD').replace(/\p{M}+/gu, '');
+}
+
+export function normalizeLetter(c: string): string {
+  return stripAccents(c.toLowerCase());
+}
+
+export function lettersEqual(a: string, b: string): boolean {
+  return normalizeLetter(a) === normalizeLetter(b);
+}
+
+export function isGuessableLetter(c: string): boolean {
+  return /\p{L}/u.test(c);
+}

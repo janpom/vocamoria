@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import Hangman from './games/Hangman';
 import Matching from './games/Matching';
 import Pairs from './games/Pairs';
 import Quiz from './games/Quiz';
@@ -17,6 +18,7 @@ export default function App() {
       <Route path="/matching" element={<Matching />} />
       <Route path="/pairs" element={<Pairs />} />
       <Route path="/typing" element={<Typing />} />
+      <Route path="/hangman" element={<Hangman />} />
       <Route path="/words" element={<WordList />} />
       <Route path="/settings" element={<Settings />} />
       <Route path="*" element={<Navigate to="/" replace />} />
