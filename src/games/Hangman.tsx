@@ -54,6 +54,7 @@ export default function Hangman() {
   const [phase, setPhase] = useState<Phase>({ kind: 'asking' });
   const [finished, setFinished] = useState<Finished | null>(null);
   const timerRef = useRef<number | null>(null);
+  const keyHandlerRef = useRef<(e: KeyboardEvent) => void>(() => {});
 
   useEffect(
     () => () => {
@@ -61,6 +62,12 @@ export default function Hangman() {
     },
     [],
   );
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => keyHandlerRef.current(e);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   if (vocab.words.length === 0) return <Navigate to="/import" replace />;
 
@@ -170,6 +177,19 @@ export default function Hangman() {
   const onNext = () => {
     if (phase.kind !== 'lost') return;
     advance(results);
+  };
+
+  keyHandlerRef.current = (e: KeyboardEvent) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'Enter' && phase.kind === 'lost') {
+      e.preventDefault();
+      onNext();
+      return;
+    }
+    if (e.key.length !== 1) return;
+    if (!isGuessableLetter(e.key)) return;
+    e.preventDefault();
+    guess(e.key);
   };
 
   const reveal = phase.kind !== 'asking';
