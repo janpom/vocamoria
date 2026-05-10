@@ -173,12 +173,25 @@ export default function Hangman() {
   };
 
   const reveal = phase.kind !== 'asking';
-  const cells = [...target].map((c, i) => {
+  type Cell = { i: number; char: string; visible: boolean; guessable: boolean };
+  const cells: Cell[] = [...target].map((c, i) => {
     const guessable = isGuessableLetter(c);
     const isGuessed = guessable && guessed.has(normalizeLetter(c));
     const visible = !guessable || isGuessed || reveal;
     return { i, char: c, visible, guessable };
   });
+
+  const cellGroups: Cell[][] = [];
+  let pending: Cell[] = [];
+  for (const cell of cells) {
+    if (/\s/.test(cell.char)) {
+      if (pending.length) cellGroups.push(pending);
+      pending = [];
+    } else {
+      pending.push(cell);
+    }
+  }
+  if (pending.length) cellGroups.push(pending);
 
   const letterButtonState = (letter: string): 'idle' | 'hit' | 'miss' => {
     const norm = normalizeLetter(letter);
@@ -205,24 +218,28 @@ export default function Hangman() {
           <div className="text-2xl font-bold">{prompt}</div>
         </div>
 
-        <div className="flex flex-wrap gap-1.5 justify-center mb-6">
-          {cells.map((cell) => {
-            const isLetterCell = cell.guessable;
-            const baseStyle =
-              'min-w-7 h-10 flex items-center justify-center text-xl font-bold border-b-2';
-            const stateStyle = !isLetterCell
-              ? 'border-transparent text-slate-400'
-              : cell.visible
-                ? phase.kind === 'lost' && !guessed.has(normalizeLetter(cell.char))
-                  ? 'border-rose-400 text-rose-700'
-                  : 'border-slate-400 text-slate-900'
-                : 'border-slate-400 text-transparent';
-            return (
-              <span key={cell.i} className={`${baseStyle} ${stateStyle}`}>
-                {cell.visible ? cell.char : '·'}
-              </span>
-            );
-          })}
+        <div className="flex flex-wrap gap-x-4 gap-y-2 justify-center mb-6">
+          {cellGroups.map((group, gi) => (
+            <div key={gi} className="flex flex-nowrap gap-1.5">
+              {group.map((cell) => {
+                const isLetterCell = cell.guessable;
+                const baseStyle =
+                  'min-w-7 h-10 flex items-center justify-center text-xl font-bold border-b-2';
+                const stateStyle = !isLetterCell
+                  ? 'border-transparent text-slate-400'
+                  : cell.visible
+                    ? phase.kind === 'lost' && !guessed.has(normalizeLetter(cell.char))
+                      ? 'border-rose-400 text-rose-700'
+                      : 'border-slate-400 text-slate-900'
+                    : 'border-slate-400 text-transparent';
+                return (
+                  <span key={cell.i} className={`${baseStyle} ${stateStyle}`}>
+                    {cell.visible ? cell.char : '·'}
+                  </span>
+                );
+              })}
+            </div>
+          ))}
         </div>
 
         <div className="flex justify-center gap-1.5 text-2xl mb-4" aria-label={`${mistakesLeft} mistakes left`}>
