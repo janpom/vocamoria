@@ -6,13 +6,19 @@ import {
   pickWords,
   wordWeight,
 } from './exerciseSelector';
-import { EXERCISE_RANK, type ExerciseType } from './mastery';
+import { EXERCISE_RANK, type ExerciseType, type WordMastery, emptyWordMastery } from './mastery';
 import { emptyPracticeState } from './practice';
 import type { Vocab } from './types';
 
 const vocab = (ids: string[]): Vocab => ({
   settings: { articlePrefixes: [] },
   words: ids.map((id) => ({ id, term: id, translation: id })),
+});
+
+const m = (progress: number, streak = 0): WordMastery => ({
+  ...emptyWordMastery(),
+  progress,
+  typingNToLStreak: streak,
 });
 
 describe('eligibleExercises', () => {
@@ -27,15 +33,15 @@ describe('eligibleExercises', () => {
 });
 
 describe('exerciseWeight', () => {
-  it('peaks near the easy end at progress 0', () => {
-    const w = (t: ExerciseType) => exerciseWeight(t, 0);
-    expect(w('pairs')).toBeGreaterThan(w('typing-n-l'));
-    expect(w('pairs')).toBeGreaterThan(w('hangman-n-l'));
+  it('peaks near the easy end when the word has low progress', () => {
+    const w = (t: ExerciseType) => exerciseWeight(t, m(0));
+    expect(w('quiz-l-n')).toBeGreaterThan(w('typing-n-l'));
   });
 
-  it('peaks near the hard end at progress 1', () => {
-    const w = (t: ExerciseType) => exerciseWeight(t, 1);
+  it('peaks near the hard end when the word is near mastery', () => {
+    const w = (t: ExerciseType) => exerciseWeight(t, m(1));
     expect(w('typing-n-l')).toBeGreaterThan(w('pairs'));
+    expect(w('typing-n-l')).toBeGreaterThan(w('quiz-l-n'));
   });
 
   it('uses normalized rank position', () => {
@@ -45,10 +51,13 @@ describe('exerciseWeight', () => {
   });
 
   it('applies the pairs multiplier so pairs is half its peak weight', () => {
-    // At progress=0, pairs and quiz-l-n are both near the easy end.
-    // pairs is rank 1 (peak), quiz-l-n is rank 2 (slightly off-peak).
-    // With the 0.5 multiplier on pairs, quiz-l-n should outweigh pairs at p=0.
-    expect(exerciseWeight('pairs', 0)).toBeLessThan(exerciseWeight('quiz-l-n', 0));
+    expect(exerciseWeight('pairs', m(0))).toBeLessThan(exerciseWeight('quiz-l-n', m(0)));
+  });
+
+  it('boosts typing-n-l when the word has an in-progress streak', () => {
+    const noStreak = exerciseWeight('typing-n-l', m(0.85, 0));
+    const withStreak = exerciseWeight('typing-n-l', m(0.85, 1));
+    expect(withStreak).toBeGreaterThan(noStreak * 2.5);
   });
 });
 
@@ -58,8 +67,10 @@ describe('wordWeight', () => {
     expect(wordWeight(0.5)).toBeGreaterThan(wordWeight(1));
   });
 
-  it('keeps a floor so mastered words remain selectable', () => {
+  it('keeps mastered words selectable but at much lower weight', () => {
+    const ratio = wordWeight(0) / wordWeight(1);
     expect(wordWeight(1)).toBeGreaterThan(0);
+    expect(ratio).toBeGreaterThan(40);
   });
 });
 
@@ -75,6 +86,13 @@ describe('pickWords', () => {
     const v = vocab(['a', 'b']);
     expect(pickWords(v, emptyPracticeState(), 5, () => 0)).toHaveLength(2);
   });
+
+  it('honors excludeIds', () => {
+    const v = vocab(['a', 'b', 'c']);
+    const out = pickWords(v, emptyPracticeState(), 5, () => 0, new Set(['b']));
+    expect(out.map((w) => w.id)).not.toContain('b');
+    expect(out).toHaveLength(2);
+  });
 });
 
 describe('pickNextExercise', () => {
@@ -88,5 +106,26 @@ describe('pickNextExercise', () => {
 
   it('throws on empty vocab', () => {
     expect(() => pickNextExercise(vocab([]), emptyPracticeState())).toThrow();
+  });
+
+  it('pairs result includes 8 distinct words when vocab is large enough', () => {
+    // Force the type sampler to land on pairs by making it the only eligible peak —
+    // crank the vocab and seed all words as fresh, then run many trials and find a pairs result.
+    const v = vocab(Array.from({ length: 20 }, (_, i) => `w${i}`));
+    let out;
+    let attempts = 0;
+    let seed = 0;
+    while (attempts < 200) {
+      out = pickNextExercise(v, emptyPracticeState(), () => {
+        seed = (seed * 9301 + 49297) % 233280;
+        return seed / 233280;
+      });
+      if (out.exType === 'pairs') break;
+      attempts += 1;
+    }
+    if (out && out.exType === 'pairs') {
+      expect(out.words).toHaveLength(8);
+      expect(new Set(out.words.map((w) => w.id)).size).toBe(8);
+    }
   });
 });

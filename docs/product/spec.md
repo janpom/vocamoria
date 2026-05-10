@@ -174,17 +174,25 @@ Derived from `progress`:
 
 ## Exercise selection
 
-The Practice screen picks the next `(exerciseType, words)` combination automatically. Two independent weighted samplings:
+The Practice screen picks the next `(exerciseType, words)` automatically. **Pick word first, then exercise type tuned to that word's progress** — so a known word naturally pulls hard exercises (and graduates), while an unknown word pulls easy exercises (and gets eased in).
 
-1. **Exercise type** — Gaussian centered at the current overall progress, in normalized rank space `(rank - 1) / 6`. So at 0% overall progress, easy exercises (pairs, quiz L→N) dominate; at 50%, mid exercises peak; at 90%, hard exercises (typing N→L, hangman N→L) dominate. Every exercise has a +0.1 floor so nothing has zero weight.
-
+1. **Anchor word** — sampled from the vocab by:
    ```
-   weight(t, p) = exp(-((normRank(t) - p)^2) * 8) + 0.1
+   wordWeight(p) = (1 - p)^2 + 0.02
    ```
+   Mastered words (`p = 1`) keep a 0.02 floor, so they remain reachable for review. Unmastered words (`p = 0`) sit at ~1.02. Ratio ≈ 51:1 — mastered words come up *much* less often, but they can still come up and can drop back below 100% on a typing-n-l miss.
 
-2. **Words** — `1 - progress(w)` with a `0.05` floor, so unmastered words are preferred but mastered words remain selectable for review. Sample without replacement: 1 word for everything except pairs, 8 words for pairs.
+2. **Exercise type** — Gaussian centered on the **anchor word's** progress in normalized rank space `(rank - 1) / 6`. Easy exercises peak at low progress; hard exercises (typing-n-l) peak at near-mastery. Floor of +0.1 keeps every type reachable.
+   ```
+   typeWeight(t, anchor) = exp(-((normRank(t) - anchor.progress)^2) * 8) + 0.1
+   ```
+   Multipliers:
+   - `pairs` × 0.5 — slows it down, since it's tedious for a small per-step gain.
+   - `typing-n-l` × `(1 + 2 * streak)` when `anchor.typingNToLStreak > 0` — once a word has one typing-n-l success, the next pick strongly favors typing-n-l so the second-success path fires reliably and the word graduates to mastery.
 
-The `pairs` exercise is excluded from the type pool when the vocab has fewer than 2 words. (`Matching` from earlier versions was removed from the active set per spec; the file is gone, recoverable from git history if needed.)
+3. **For pairs**, the anchor is one of 8; the remaining 7 are sampled by the same `wordWeight` from the rest of the vocab.
+
+The `pairs` exercise is excluded entirely when the vocab has fewer than 2 words. (`Matching` from earlier versions was removed from the active set per spec; the file is gone, recoverable from git history if needed.)
 
 ## Exercises
 
