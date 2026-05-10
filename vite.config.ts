@@ -3,11 +3,12 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  base: command === 'build' ? '/vocamoria/' : '/',
   plugins: [react(), tailwindcss()],
   test: {
     globals: true,
     environment: 'node',
     include: ['src/lib/**/*.test.ts'],
   },
-});
+}));
