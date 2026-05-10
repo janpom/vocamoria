@@ -1,3 +1,5 @@
+export type Direction = 'l-n' | 'n-l';
+
 export type Word = {
   id: string;
   term: string;

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { distractorPool } from '../lib/answers';
 import { buildOptions } from '../lib/distractors';
 import type { Word } from '../lib/types';
 import type { SingleExerciseProps } from './types';
@@ -8,7 +9,10 @@ const FEEDBACK_MS = 600;
 type Phase = { kind: 'asking' } | { kind: 'feedback'; pickedId: string; correct: boolean };
 
 export default function QuizExercise({ word, vocab, direction, onComplete }: SingleExerciseProps) {
-  const options = useMemo(() => buildOptions(word, vocab.words), [word, vocab.words]);
+  const options = useMemo(
+    () => buildOptions(word, distractorPool(word, vocab, direction)),
+    [word, vocab, direction],
+  );
   const [phase, setPhase] = useState<Phase>({ kind: 'asking' });
   const timerRef = useRef<number | null>(null);
 

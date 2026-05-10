@@ -1,6 +1,6 @@
-import type { Vocab, Word } from '../lib/types';
+import type { Direction, Vocab, Word } from '../lib/types';
 
-export type Direction = 'l-n' | 'n-l';
+export type { Direction };
 
 export type ExerciseOutcome = Array<{ wordId: string; success: boolean }>;
 

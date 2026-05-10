@@ -202,11 +202,13 @@ All exercises return per-word outcomes (`{ wordId, success }[]`) which the Pract
 
 Two visible columns. Left column shows terms in a random fixed order. Right column shows translations in a random order; user reorders the right column to align row-by-row, then submits. Drag-and-drop via dnd-kit (PointerSensor + TouchSensor + KeyboardSensor). Initial right order reshuffled if it accidentally matches left.
 
-After **Submit**, each row is graded green/red. **Continue** reports per-row outcomes to the orchestrator (8 outcomes per exercise).
+After **Submit**, each row is graded green/red. A row is correct if `(leftWord.term, rightCell.translation)` exists as any pair in the vocab — **not** strict id equality. So if two distinct entries share a translation (or two share a term), either placement counts as correct. **Continue** reports per-row outcomes to the orchestrator (8 outcomes per exercise).
 
 ### Quiz (L→N or N→L)
 
 Prompt at top (term or translation depending on direction); 4 options; tapping correct → green flash + auto-advance after 600 ms; tapping wrong → red flash + the correct answer highlights + manual Next. Distractors come from other words in the vocab (preferring same `lesson` if set), never random strings. Reports a single outcome per exercise.
+
+**Duplicate handling**: distractors are filtered to exclude any word whose answer-side text matches the correct word's answer-side text. So if vocab has both `die Heidelbeere → borůvka` and `die Blaubeere → borůvka`, the L→N quiz on `die Blaubeere` won't show two `borůvka` options.
 
 ### Typing (L→N or N→L)
 
@@ -216,6 +218,7 @@ Prompt at top, text input below, Submit (or Enter). Comparison via `checkAnswer`
 - Levenshtein ≤ 1 (for targets longer than 4 chars) accepted as "close" — counts as success but shows the correct answer.
 - For `n-l` direction only: strip a leading article from `settings.articlePrefixes` before comparing; accept any string in the per-word `alternates` array.
 - For `l-n` direction: article stripping and `alternates` do not apply (they're source-language features and don't transfer).
+- **Duplicate handling**: any word in the vocab that shares the prompt-side text contributes its answer-side text (and, in `n-l`, its `alternates`) to the accepted-answers pool. So if vocab has `die Heidelbeere → borůvka` and `die Blaubeere → borůvka`, typing N→L on prompt `borůvka` accepts either German term.
 
 Auto-advance on exact correct after 700 ms; manual Next on wrong / close.
 

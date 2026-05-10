@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { acceptableAnswers } from '../lib/answers';
 import { checkAnswer } from '../lib/normalize';
 import type { SingleExerciseProps } from './types';
 
@@ -26,8 +27,10 @@ export default function TypingExercise({ word, vocab, direction, onComplete }: S
   );
 
   const promptText = direction === 'l-n' ? word.term : word.translation;
-  const expectedText = direction === 'l-n' ? word.translation : word.term;
-  const expectedAlternates = direction === 'n-l' ? word.alternates ?? [] : [];
+  const { primary: expectedText, alternates: expectedAlternates } = useMemo(
+    () => acceptableAnswers(word, vocab, direction),
+    [word, vocab, direction],
+  );
   const checkOpts =
     direction === 'n-l'
       ? { articlePrefixes: vocab.settings.articlePrefixes }

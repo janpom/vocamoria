@@ -18,6 +18,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Fragment, type ReactNode, useMemo, useState } from 'react';
+import { isValidPair } from '../lib/answers';
 import { shuffle } from '../lib/selection';
 import type { Word } from '../lib/types';
 import type { ExerciseOutcome, PairsExerciseProps } from './types';
@@ -33,7 +34,7 @@ function shuffleAvoidingIdentity(words: Word[], reference: Word[]): Word[] {
   return out;
 }
 
-export default function PairsExercise({ words, onComplete }: PairsExerciseProps) {
+export default function PairsExercise({ words, vocab, onComplete }: PairsExerciseProps) {
   const leftCol = useMemo(() => shuffle(words), [words]);
   const initialRight = useMemo(
     () => shuffleAvoidingIdentity(words, leftCol),
@@ -88,16 +89,23 @@ export default function PairsExercise({ words, onComplete }: PairsExerciseProps)
 
   const onSubmit = () => setSubmitted(true);
 
+  const isRowCorrect = (i: number): boolean => {
+    const right = rightCol[i];
+    const leftWord = leftCol[i];
+    if (!right) return false;
+    return isValidPair(leftWord.term, right.translation, vocab);
+  };
+
   const onContinue = () => {
     const out: ExerciseOutcome = leftCol.map((leftWord, i) => ({
       wordId: leftWord.id,
-      success: rightCol[i]?.id === leftWord.id,
+      success: isRowCorrect(i),
     }));
     onComplete(out);
   };
 
   const correctSoFar = submitted
-    ? leftCol.reduce((acc, w, i) => acc + (rightCol[i]?.id === w.id ? 1 : 0), 0)
+    ? leftCol.reduce((acc, _w, i) => acc + (isRowCorrect(i) ? 1 : 0), 0)
     : 0;
 
   const cellBase =
@@ -130,7 +138,7 @@ export default function PairsExercise({ words, onComplete }: PairsExerciseProps)
           <div className="flex-1 grid grid-cols-2 gap-2">
             {leftCol.map((leftWord, i) => {
               const right = rightCol[i];
-              const isCorrect = submitted && right?.id === leftWord.id;
+              const isCorrect = submitted && isRowCorrect(i);
               const isWrong = submitted && !isCorrect;
               const isPicked = !submitted && pickedId === right.id;
               const rightIdle = submitted
