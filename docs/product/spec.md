@@ -133,41 +133,46 @@ type PracticeState = {
 };
 
 type WordMastery = {
-  progress: number;          // 0..1
-  typingNToLStreak: number;  // 0..2 — successful typing N→L attempts in a row, no failed typing N→L in between
-  attempts: number;          // total attempts across all exercises
-  successes: number;         // total successes
+  streaks: Partial<Record<ExerciseType, number>>;  // 0..2 per type
+  attempts: number;                                 // total attempts
+  successes: number;                                // total successes
 };
 ```
 
-There is no Leitner / SRS state. Mastery is driven by direct progress accumulation per exercise outcome.
+There is no Leitner / SRS state. Mastery is driven by per-(word, exercise-type) consecutive-success streaks.
 
 ## Mastery model
 
-A word's `progress` is a single number in `[0, 1]`.
+For each word, the app tracks an independent **consecutive-success streak per exercise type** (`streaks[t]`, capped at `STREAK_TARGET = 2`). Two streak states matter:
 
-- The ultimate goal is **two consecutive successful typing N→L attempts on the same word, with no failed typing N→L in between** (other failures don't reset the streak). When that happens, `progress` snaps to `1.0`.
-- Until then, `progress` accumulates from any exercise, capped at `0.99`. Each exercise outcome moves `progress` by a fixed `EXERCISE_DELTA` for that exercise type, signed by success (+) or failure (−). Floors at 0.
+- **Promoted**: any *non-`typing-n-l`* type has a streak of 2. The word has demonstrated competency on something — the algorithm escalates.
+- **Mastered**: `streaks['typing-n-l'] >= 2`. The explicit goal: two consecutive successful typing N→L attempts.
 
-Per-exercise delta magnitudes (success bumps progress, failure subtracts the same amount):
+Once promoted, the algorithm picks `typing-n-l` deterministically until either it gets a second success (mastered) or a typing-n-l failure demotes the word.
 
-| Exercise | Δ | Rank |
-|----------|------|---|
-| pairs | 0.05 | 1 |
-| quiz L→N | 0.08 | 2 |
-| quiz N→L | 0.10 | 3 |
-| hangman L→N | 0.13 | 4 |
-| typing L→N | 0.16 | 5 |
-| hangman N→L | 0.20 | 6 |
-| typing N→L | 0.25 | 7 |
+### State transitions
 
-Failure on `typing-n-l` after mastery (`progress = 1.0`) resets the streak to 0 and applies the standard Δ penalty, so the word is no longer mastered.
+- Success on type `T` → `streaks[T] = min(2, streaks[T] + 1)`.
+- Failure on any type `T` → `streaks[T] = 0`.
+- Failure on `typing-n-l` additionally **demotes**: every other streak decrements by 1 (floored at 0). The word loses its promotion and the algorithm goes back to the Gaussian fallback until it re-earns a streak of 2 somewhere.
 
-**Overall progress** = mean of per-word `progress` across the entire vocab list. Shown on the Home screen and at the top of every Practice screen.
+A word that is mastered then fails `typing-n-l` loses mastery (streak there resets to 0) and demotes — the "100% can be lost" rule.
+
+### Derived progress (for the bar)
+
+```
+progressOf(m) =
+  1.00  if mastered (streak[typing-n-l] >= 2)
+  0.85  else if streak[typing-n-l] >= 1
+  0.60  else if promoted (any non-typing-n-l streak >= 2)
+  min(0.55, sumOfStreaks * 0.08)  otherwise
+```
+
+**Overall progress** = mean of per-word `progressOf` across the entire vocab list.
 
 ### Mastery labels (for the UI)
 
-Derived from `progress`:
+Derived from `progressOf`:
 - `[0.0, 0.6)` → Learning
 - `[0.6, 1.0)` → Practicing
 - `[1.0]` → Mastered
@@ -182,13 +187,12 @@ The Practice screen picks the next `(exerciseType, words)` automatically. **Pick
    ```
    Mastered words (`p = 1`) keep a 0.02 floor, so they remain reachable for review. Unmastered words (`p = 0`) sit at ~1.02. Ratio ≈ 51:1 — mastered words come up *much* less often, but they can still come up and can drop back below 100% on a typing-n-l miss.
 
-2. **Exercise type** — Gaussian centered on the **anchor word's** progress in normalized rank space `(rank - 1) / 6`. Easy exercises peak at low progress; hard exercises (typing-n-l) peak at near-mastery. Floor of +0.1 keeps every type reachable.
+2. **Exercise type** — two-stage:
+   - **Deterministic typing-n-l** when the anchor word is *promoted* (any non-typing-n-l streak >= 2) OR `streak[typing-n-l] === 1`. So a known word that's shown competency at any easier level jumps straight to typing-n-l until it either masters or demotes via a failure.
+   - **Otherwise (novice)**: weighted random by Gaussian centered on the anchor word's derived progress in normalized rank space `(rank - 1) / 6`, with a +0.1 floor and a `× 0.5` multiplier on `pairs` (it's tedious, slow it down).
    ```
-   typeWeight(t, anchor) = exp(-((normRank(t) - anchor.progress)^2) * 8) + 0.1
+   typeWeight(t, anchor) = exp(-((normRank(t) - progressOf(anchor))^2) * 8) + 0.1
    ```
-   Multipliers:
-   - `pairs` × 0.5 — slows it down, since it's tedious for a small per-step gain.
-   - `typing-n-l` × `(1 + 2 * streak)` when `anchor.typingNToLStreak > 0` — once a word has one typing-n-l success, the next pick strongly favors typing-n-l so the second-success path fires reliably and the word graduates to mastery.
 
 3. **For pairs**, the anchor is one of 8; the remaining 7 are sampled by the same `wordWeight` from the rest of the vocab.
 

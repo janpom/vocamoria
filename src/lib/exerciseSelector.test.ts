@@ -1,24 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import {
+  chooseTypeForWord,
   eligibleExercises,
   exerciseWeight,
   pickNextExercise,
   pickWords,
   wordWeight,
 } from './exerciseSelector';
-import { EXERCISE_RANK, type ExerciseType, type WordMastery, emptyWordMastery } from './mastery';
+import {
+  EXERCISE_RANK,
+  EXERCISE_TYPES,
+  type ExerciseType,
+  applyExerciseResult,
+  emptyWordMastery,
+} from './mastery';
 import { emptyPracticeState } from './practice';
 import type { Vocab } from './types';
 
 const vocab = (ids: string[]): Vocab => ({
   settings: { articlePrefixes: [] },
   words: ids.map((id) => ({ id, term: id, translation: id })),
-});
-
-const m = (progress: number, streak = 0): WordMastery => ({
-  ...emptyWordMastery(),
-  progress,
-  typingNToLStreak: streak,
 });
 
 describe('eligibleExercises', () => {
@@ -33,15 +34,9 @@ describe('eligibleExercises', () => {
 });
 
 describe('exerciseWeight', () => {
-  it('peaks near the easy end when the word has low progress', () => {
-    const w = (t: ExerciseType) => exerciseWeight(t, m(0));
+  it('peaks at the easy end for a fresh word', () => {
+    const w = (t: ExerciseType) => exerciseWeight(t, emptyWordMastery());
     expect(w('quiz-l-n')).toBeGreaterThan(w('typing-n-l'));
-  });
-
-  it('peaks near the hard end when the word is near mastery', () => {
-    const w = (t: ExerciseType) => exerciseWeight(t, m(1));
-    expect(w('typing-n-l')).toBeGreaterThan(w('pairs'));
-    expect(w('typing-n-l')).toBeGreaterThan(w('quiz-l-n'));
   });
 
   it('uses normalized rank position', () => {
@@ -51,13 +46,9 @@ describe('exerciseWeight', () => {
   });
 
   it('applies the pairs multiplier so pairs is half its peak weight', () => {
-    expect(exerciseWeight('pairs', m(0))).toBeLessThan(exerciseWeight('quiz-l-n', m(0)));
-  });
-
-  it('boosts typing-n-l when the word has an in-progress streak', () => {
-    const noStreak = exerciseWeight('typing-n-l', m(0.85, 0));
-    const withStreak = exerciseWeight('typing-n-l', m(0.85, 1));
-    expect(withStreak).toBeGreaterThan(noStreak * 2.5);
+    expect(exerciseWeight('pairs', emptyWordMastery())).toBeLessThan(
+      exerciseWeight('quiz-l-n', emptyWordMastery()),
+    );
   });
 });
 
@@ -71,6 +62,32 @@ describe('wordWeight', () => {
     const ratio = wordWeight(0) / wordWeight(1);
     expect(wordWeight(1)).toBeGreaterThan(0);
     expect(ratio).toBeGreaterThan(40);
+  });
+});
+
+describe('chooseTypeForWord', () => {
+  const eligible = EXERCISE_TYPES;
+
+  it('returns typing-n-l deterministically when the word is promoted', () => {
+    let m = applyExerciseResult(emptyWordMastery(), 'pairs', true);
+    m = applyExerciseResult(m, 'pairs', true);
+    expect(chooseTypeForWord(m, eligible, () => 0)).toBe('typing-n-l');
+    expect(chooseTypeForWord(m, eligible, () => 0.5)).toBe('typing-n-l');
+    expect(chooseTypeForWord(m, eligible, () => 0.999)).toBe('typing-n-l');
+  });
+
+  it('returns typing-n-l deterministically when the streak there is 1', () => {
+    const m = applyExerciseResult(emptyWordMastery(), 'typing-n-l', true);
+    expect(chooseTypeForWord(m, eligible, () => 0)).toBe('typing-n-l');
+  });
+
+  it('falls back to weighted sampling for novice words', () => {
+    // A fresh word should not deterministically pick typing-n-l.
+    const seen = new Set<ExerciseType>();
+    for (let i = 0; i < 50; i++) {
+      seen.add(chooseTypeForWord(emptyWordMastery(), eligible, () => i / 50));
+    }
+    expect(seen.size).toBeGreaterThan(1);
   });
 });
 
@@ -106,26 +123,5 @@ describe('pickNextExercise', () => {
 
   it('throws on empty vocab', () => {
     expect(() => pickNextExercise(vocab([]), emptyPracticeState())).toThrow();
-  });
-
-  it('pairs result includes 8 distinct words when vocab is large enough', () => {
-    // Force the type sampler to land on pairs by making it the only eligible peak —
-    // crank the vocab and seed all words as fresh, then run many trials and find a pairs result.
-    const v = vocab(Array.from({ length: 20 }, (_, i) => `w${i}`));
-    let out;
-    let attempts = 0;
-    let seed = 0;
-    while (attempts < 200) {
-      out = pickNextExercise(v, emptyPracticeState(), () => {
-        seed = (seed * 9301 + 49297) % 233280;
-        return seed / 233280;
-      });
-      if (out.exType === 'pairs') break;
-      attempts += 1;
-    }
-    if (out && out.exType === 'pairs') {
-      expect(out.words).toHaveLength(8);
-      expect(new Set(out.words.map((w) => w.id)).size).toBe(8);
-    }
   });
 });

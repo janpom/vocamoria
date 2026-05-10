@@ -13,11 +13,12 @@ describe('parsePracticeState', () => {
   it('parses a stored valid state', () => {
     const stored = JSON.stringify({
       words: {
-        hund: { progress: 0.5, typingNToLStreak: 1, attempts: 3, successes: 2 },
+        hund: { streaks: { 'pairs': 2, 'typing-n-l': 1 }, attempts: 3, successes: 2 },
       },
     });
     const out = parsePracticeState(stored);
-    expect(out.words.hund.progress).toBe(0.5);
-    expect(out.words.hund.typingNToLStreak).toBe(1);
+    expect(out.words.hund.streaks?.['pairs']).toBe(2);
+    expect(out.words.hund.streaks?.['typing-n-l']).toBe(1);
+    expect(out.words.hund.attempts).toBe(3);
   });
 });

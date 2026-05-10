@@ -1,12 +1,5 @@
 import type { Vocab } from './types';
 
-export type WordMastery = {
-  progress: number;
-  typingNToLStreak: number;
-  attempts: number;
-  successes: number;
-};
-
 export type ExerciseType =
   | 'pairs'
   | 'quiz-l-n'
@@ -36,20 +29,41 @@ export const EXERCISE_RANK: Record<ExerciseType, number> = {
   'typing-n-l': 7,
 };
 
-export const EXERCISE_DELTA: Record<ExerciseType, number> = {
-  pairs: 0.05,
-  'quiz-l-n': 0.08,
-  'quiz-n-l': 0.10,
-  'hangman-l-n': 0.13,
-  'typing-l-n': 0.16,
-  'hangman-n-l': 0.20,
-  'typing-n-l': 0.25,
+export const STREAK_TARGET = 2;
+
+export type WordMastery = {
+  streaks: Partial<Record<ExerciseType, number>>;
+  attempts: number;
+  successes: number;
 };
 
-export const STREAK_TARGET = 2;
-export const NON_STREAK_CAP = 0.99;
-
 export type Mastery = 'Learning' | 'Practicing' | 'Mastered';
+
+export function emptyWordMastery(): WordMastery {
+  return { streaks: {}, attempts: 0, successes: 0 };
+}
+
+export function streakOf(m: WordMastery, t: ExerciseType): number {
+  return m.streaks?.[t] ?? 0;
+}
+
+export function isMastered(m: WordMastery): boolean {
+  return streakOf(m, 'typing-n-l') >= STREAK_TARGET;
+}
+
+export function isPromoted(m: WordMastery): boolean {
+  return EXERCISE_TYPES.some(
+    (t) => t !== 'typing-n-l' && streakOf(m, t) >= STREAK_TARGET,
+  );
+}
+
+export function progressOf(m: WordMastery): number {
+  if (isMastered(m)) return 1.0;
+  if (streakOf(m, 'typing-n-l') >= 1) return 0.85;
+  if (isPromoted(m)) return 0.6;
+  const total = EXERCISE_TYPES.reduce((acc, t) => acc + streakOf(m, t), 0);
+  return Math.min(0.55, total * 0.08);
+}
 
 export function masteryLabel(progress: number): Mastery {
   if (progress >= 1.0) return 'Mastered';
@@ -57,31 +71,29 @@ export function masteryLabel(progress: number): Mastery {
   return 'Learning';
 }
 
-export function emptyWordMastery(): WordMastery {
-  return { progress: 0, typingNToLStreak: 0, attempts: 0, successes: 0 };
-}
-
 export function applyExerciseResult(
   m: WordMastery,
   exType: ExerciseType,
   success: boolean,
 ): WordMastery {
-  const delta = success ? EXERCISE_DELTA[exType] : -EXERCISE_DELTA[exType];
-  let progress = clamp(m.progress + delta, 0, NON_STREAK_CAP);
-  let streak = m.typingNToLStreak;
+  const streaks: Partial<Record<ExerciseType, number>> = { ...(m.streaks ?? {}) };
 
-  if (exType === 'typing-n-l') {
-    if (success) {
-      streak = Math.min(streak + 1, STREAK_TARGET);
-      if (streak >= STREAK_TARGET) progress = 1.0;
-    } else {
-      streak = 0;
+  if (success) {
+    streaks[exType] = Math.min(STREAK_TARGET, streakOf(m, exType) + 1);
+  } else {
+    streaks[exType] = 0;
+    if (exType === 'typing-n-l') {
+      // Failure on the hardest exercise demotes: knock every other streak down by 1.
+      for (const t of EXERCISE_TYPES) {
+        if (t === 'typing-n-l') continue;
+        const cur = streaks[t] ?? 0;
+        if (cur > 0) streaks[t] = cur - 1;
+      }
     }
   }
 
   return {
-    progress,
-    typingNToLStreak: streak,
+    streaks,
     attempts: m.attempts + 1,
     successes: m.successes + (success ? 1 : 0),
   };
@@ -94,11 +106,8 @@ export function overallProgress(
   if (vocab.words.length === 0) return 0;
   let total = 0;
   for (const w of vocab.words) {
-    total += words[w.id]?.progress ?? 0;
+    const m = words[w.id];
+    total += m ? progressOf(m) : 0;
   }
   return total / vocab.words.length;
-}
-
-function clamp(x: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, x));
 }

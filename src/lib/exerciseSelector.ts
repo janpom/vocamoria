@@ -4,6 +4,10 @@ import {
   type ExerciseType,
   type WordMastery,
   emptyWordMastery,
+  isMastered,
+  isPromoted,
+  progressOf,
+  streakOf,
 } from './mastery';
 import type { PracticeState } from './practice';
 import type { Vocab, Word } from './types';
@@ -14,16 +18,10 @@ export const TYPE_WEIGHT_MULTIPLIER: Partial<Record<ExerciseType, number>> = {
   pairs: 0.5,
 };
 
-const STREAK_BOOST = 2;
-
 export function exerciseWeight(exType: ExerciseType, mastery: WordMastery): number {
   const normRank = (EXERCISE_RANK[exType] - 1) / (EXERCISE_TYPES.length - 1);
-  const base = Math.exp(-Math.pow(normRank - mastery.progress, 2) * 8) + 0.1;
-  let weight = base * (TYPE_WEIGHT_MULTIPLIER[exType] ?? 1);
-  if (exType === 'typing-n-l' && mastery.typingNToLStreak > 0) {
-    weight *= 1 + STREAK_BOOST * mastery.typingNToLStreak;
-  }
-  return weight;
+  const base = Math.exp(-Math.pow(normRank - progressOf(mastery), 2) * 8) + 0.1;
+  return base * (TYPE_WEIGHT_MULTIPLIER[exType] ?? 1);
 }
 
 export function eligibleExercises(vocabSize: number): ExerciseType[] {
@@ -50,6 +48,25 @@ function masteryOf(state: PracticeState, id: string): WordMastery {
   return state.words[id] ?? emptyWordMastery();
 }
 
+export function chooseTypeForWord(
+  m: WordMastery,
+  eligible: ExerciseType[],
+  random: () => number = Math.random,
+): ExerciseType {
+  // Deterministic typing-n-l in two cases:
+  //   1. First typing-n-l success landed → close out the streak.
+  //   2. Word is promoted (any non-typing-n-l streak hit STREAK_TARGET).
+  if (
+    eligible.includes('typing-n-l') &&
+    !isMastered(m) &&
+    (streakOf(m, 'typing-n-l') >= 1 || isPromoted(m))
+  ) {
+    return 'typing-n-l';
+  }
+  const weights = eligible.map((t) => exerciseWeight(t, m));
+  return eligible[weightedSampleIndex(weights, random)];
+}
+
 export function pickWords(
   vocab: Vocab,
   state: PracticeState,
@@ -59,7 +76,7 @@ export function pickWords(
 ): Word[] {
   const pool = vocab.words
     .filter((w) => !excludeIds.has(w.id))
-    .map((w) => ({ word: w, weight: wordWeight(masteryOf(state, w.id).progress) }));
+    .map((w) => ({ word: w, weight: wordWeight(progressOf(masteryOf(state, w.id))) }));
   const out: Word[] = [];
   for (let i = 0; i < count && pool.length > 0; i++) {
     const idx = weightedSampleIndex(
@@ -86,18 +103,15 @@ export function pickNextExercise(
     throw new Error('Cannot pick an exercise from an empty vocab.');
   }
 
-  // 1. Pick the anchor word by per-word weight.
-  const anchorWeights = vocab.words.map((w) => wordWeight(masteryOf(state, w.id).progress));
+  const anchorWeights = vocab.words.map((w) =>
+    wordWeight(progressOf(masteryOf(state, w.id))),
+  );
   const anchor = vocab.words[weightedSampleIndex(anchorWeights, random)];
   const anchorMastery = masteryOf(state, anchor.id);
 
-  // 2. Pick the exercise type by Gaussian centered on THIS word's progress
-  //    (so high-progress words pull harder exercises, including typing-n-l for graduation).
   const eligible = eligibleExercises(vocab.words.length);
-  const typeWeights = eligible.map((t) => exerciseWeight(t, anchorMastery));
-  const exType = eligible[weightedSampleIndex(typeWeights, random)];
+  const exType = chooseTypeForWord(anchorMastery, eligible, random);
 
-  // 3. For pairs, fill the remaining 7 slots from the rest of the vocab.
   if (exType === 'pairs') {
     const more = pickWords(
       vocab,

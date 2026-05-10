@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { type Mastery, masteryLabel } from '../lib/mastery';
+import { type Mastery, emptyWordMastery, masteryLabel, progressOf } from '../lib/mastery';
 import { loadPracticeState } from '../lib/practice';
 import { loadVocab } from '../lib/vocab';
 
@@ -17,14 +17,14 @@ export default function WordList() {
   if (vocab.words.length === 0) return <Navigate to="/import" replace />;
 
   const rows = vocab.words.map((w) => {
-    const m = state.words[w.id];
-    const progress = m?.progress ?? 0;
+    const m = state.words[w.id] ?? emptyWordMastery();
+    const progress = progressOf(m);
     return {
       word: w,
       progress,
       mastery: masteryLabel(progress),
-      attempts: m?.attempts ?? 0,
-      successes: m?.successes ?? 0,
+      attempts: m.attempts,
+      successes: m.successes,
     };
   });
 

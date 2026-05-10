@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
-  EXERCISE_DELTA,
-  NON_STREAK_CAP,
   STREAK_TARGET,
   applyExerciseResult,
   emptyWordMastery,
+  isMastered,
+  isPromoted,
   masteryLabel,
   overallProgress,
+  progressOf,
+  streakOf,
 } from './mastery';
 import type { Vocab } from './types';
 
@@ -15,14 +17,18 @@ const vocab = (ids: string[]): Vocab => ({
   words: ids.map((id) => ({ id, term: id, translation: id })),
 });
 
-describe('emptyWordMastery', () => {
-  it('returns zeroed state', () => {
-    expect(emptyWordMastery()).toEqual({
-      progress: 0,
-      typingNToLStreak: 0,
-      attempts: 0,
-      successes: 0,
-    });
+describe('emptyWordMastery / streakOf', () => {
+  it('starts with all streaks zero', () => {
+    const m = emptyWordMastery();
+    expect(streakOf(m, 'pairs')).toBe(0);
+    expect(streakOf(m, 'typing-n-l')).toBe(0);
+    expect(m.attempts).toBe(0);
+    expect(m.successes).toBe(0);
+  });
+
+  it('survives undefined streaks (back-compat)', () => {
+    const m = { attempts: 0, successes: 0 } as never;
+    expect(streakOf(m, 'pairs')).toBe(0);
   });
 });
 
@@ -39,67 +45,89 @@ describe('masteryLabel', () => {
 });
 
 describe('applyExerciseResult', () => {
-  it('increases progress by EXERCISE_DELTA on success', () => {
-    const out = applyExerciseResult(emptyWordMastery(), 'pairs', true);
-    expect(out.progress).toBeCloseTo(EXERCISE_DELTA.pairs);
-    expect(out.attempts).toBe(1);
-    expect(out.successes).toBe(1);
+  it('successful pairs bumps that type streak', () => {
+    const m = applyExerciseResult(emptyWordMastery(), 'pairs', true);
+    expect(streakOf(m, 'pairs')).toBe(1);
+    expect(m.attempts).toBe(1);
+    expect(m.successes).toBe(1);
   });
 
-  it('decreases progress by EXERCISE_DELTA on failure', () => {
-    const start = { ...emptyWordMastery(), progress: 0.5 };
-    const out = applyExerciseResult(start, 'quiz-n-l', false);
-    expect(out.progress).toBeCloseTo(0.5 - EXERCISE_DELTA['quiz-n-l']);
-    expect(out.attempts).toBe(1);
-    expect(out.successes).toBe(0);
+  it('streak caps at STREAK_TARGET', () => {
+    let m = emptyWordMastery();
+    for (let i = 0; i < 10; i++) m = applyExerciseResult(m, 'pairs', true);
+    expect(streakOf(m, 'pairs')).toBe(STREAK_TARGET);
   });
 
-  it('floors progress at 0', () => {
-    const start = { ...emptyWordMastery(), progress: 0.05 };
-    const out = applyExerciseResult(start, 'typing-l-n', false);
-    expect(out.progress).toBe(0);
+  it('two streaks on a non-typing-n-l type promote the word', () => {
+    let m = applyExerciseResult(emptyWordMastery(), 'quiz-l-n', true);
+    m = applyExerciseResult(m, 'quiz-l-n', true);
+    expect(isPromoted(m)).toBe(true);
+    expect(isMastered(m)).toBe(false);
   });
 
-  it('caps non-typing-n-l progress at NON_STREAK_CAP', () => {
-    let m = { ...emptyWordMastery(), progress: 0.95 };
-    m = applyExerciseResult(m, 'hangman-n-l', true);
-    m = applyExerciseResult(m, 'hangman-n-l', true);
-    expect(m.progress).toBe(NON_STREAK_CAP);
-    expect(m.typingNToLStreak).toBe(0);
-  });
-
-  it('typing-n-l first success bumps streak but not to mastery', () => {
-    const out = applyExerciseResult(emptyWordMastery(), 'typing-n-l', true);
-    expect(out.typingNToLStreak).toBe(1);
-    expect(out.progress).toBeLessThan(1);
-  });
-
-  it('typing-n-l second consecutive success snaps progress to 1.0', () => {
+  it('two streaks on typing-n-l master the word', () => {
     let m = applyExerciseResult(emptyWordMastery(), 'typing-n-l', true);
     m = applyExerciseResult(m, 'typing-n-l', true);
-    expect(m.typingNToLStreak).toBe(STREAK_TARGET);
-    expect(m.progress).toBe(1.0);
+    expect(isMastered(m)).toBe(true);
+    expect(progressOf(m)).toBe(1.0);
   });
 
-  it('typing-n-l failure resets streak but other failures do not', () => {
-    let m = applyExerciseResult(emptyWordMastery(), 'typing-n-l', true);
-    expect(m.typingNToLStreak).toBe(1);
+  it('failure on a type only resets that type', () => {
+    let m = applyExerciseResult(emptyWordMastery(), 'pairs', true);
+    m = applyExerciseResult(m, 'quiz-l-n', true);
+    m = applyExerciseResult(m, 'pairs', false);
+    expect(streakOf(m, 'pairs')).toBe(0);
+    expect(streakOf(m, 'quiz-l-n')).toBe(1);
+  });
 
-    m = applyExerciseResult(m, 'quiz-n-l', false);
-    expect(m.typingNToLStreak).toBe(1);
+  it('failure on typing-n-l demotes by knocking every other streak down by 1', () => {
+    let m = emptyWordMastery();
+    m = applyExerciseResult(m, 'pairs', true);
+    m = applyExerciseResult(m, 'pairs', true);
+    m = applyExerciseResult(m, 'quiz-n-l', true);
+    expect(streakOf(m, 'pairs')).toBe(2);
+    expect(streakOf(m, 'quiz-n-l')).toBe(1);
 
     m = applyExerciseResult(m, 'typing-n-l', false);
-    expect(m.typingNToLStreak).toBe(0);
+    expect(streakOf(m, 'typing-n-l')).toBe(0);
+    expect(streakOf(m, 'pairs')).toBe(1);
+    expect(streakOf(m, 'quiz-n-l')).toBe(0);
   });
 
-  it('failure on typing-n-l after mastery drops progress and resets streak', () => {
+  it('typing-n-l failure after mastery drops back to non-mastered', () => {
+    let m = emptyWordMastery();
+    m = applyExerciseResult(m, 'typing-n-l', true);
+    m = applyExerciseResult(m, 'typing-n-l', true);
+    expect(isMastered(m)).toBe(true);
+    m = applyExerciseResult(m, 'typing-n-l', false);
+    expect(isMastered(m)).toBe(false);
+    expect(progressOf(m)).toBeLessThan(1);
+  });
+});
+
+describe('progressOf', () => {
+  it('mastered → 1.0', () => {
     let m = applyExerciseResult(emptyWordMastery(), 'typing-n-l', true);
     m = applyExerciseResult(m, 'typing-n-l', true);
-    expect(m.progress).toBe(1.0);
+    expect(progressOf(m)).toBe(1.0);
+  });
 
-    m = applyExerciseResult(m, 'typing-n-l', false);
-    expect(m.typingNToLStreak).toBe(0);
-    expect(m.progress).toBeCloseTo(1.0 - EXERCISE_DELTA['typing-n-l']);
+  it('typing-n-l streak of 1 → 0.85 (close to mastery)', () => {
+    const m = applyExerciseResult(emptyWordMastery(), 'typing-n-l', true);
+    expect(progressOf(m)).toBe(0.85);
+  });
+
+  it('promoted (any non-typing-n-l streak >= 2) → 0.6', () => {
+    let m = applyExerciseResult(emptyWordMastery(), 'pairs', true);
+    m = applyExerciseResult(m, 'pairs', true);
+    expect(progressOf(m)).toBe(0.6);
+  });
+
+  it('novice partial credit scales with sum of streaks', () => {
+    let m = applyExerciseResult(emptyWordMastery(), 'pairs', true);
+    expect(progressOf(m)).toBeCloseTo(0.08);
+    m = applyExerciseResult(m, 'quiz-l-n', true);
+    expect(progressOf(m)).toBeCloseTo(0.16);
   });
 });
 
@@ -108,12 +136,10 @@ describe('overallProgress', () => {
     expect(overallProgress(vocab([]), {})).toBe(0);
   });
 
-  it('averages per-word progress', () => {
+  it('averages per-word progress (with one mastered word)', () => {
     const v = vocab(['a', 'b', 'c', 'd']);
-    const out = overallProgress(v, {
-      a: { ...emptyWordMastery(), progress: 1.0 },
-      b: { ...emptyWordMastery(), progress: 0.5 },
-    });
-    expect(out).toBeCloseTo((1.0 + 0.5 + 0 + 0) / 4);
+    let mA = applyExerciseResult(emptyWordMastery(), 'typing-n-l', true);
+    mA = applyExerciseResult(mA, 'typing-n-l', true);
+    expect(overallProgress(v, { a: mA })).toBeCloseTo(0.25);
   });
 });

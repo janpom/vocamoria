@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
-import { overallProgress } from '../lib/mastery';
+import { isMastered, overallProgress } from '../lib/mastery';
 import { loadPracticeState } from '../lib/practice';
 import { loadVocab } from '../lib/vocab';
 import RemoteLoader from './RemoteLoader';
@@ -19,7 +19,10 @@ export default function Home() {
 
   const overall = overallProgress(vocab, state.words);
   const pct = Math.round(overall * 100);
-  const mastered = vocab.words.filter((w) => (state.words[w.id]?.progress ?? 0) >= 1).length;
+  const mastered = vocab.words.filter((w) => {
+    const m = state.words[w.id];
+    return m ? isMastered(m) : false;
+  }).length;
   const isDone = overall >= 1;
 
   return (
