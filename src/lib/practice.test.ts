@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyPracticeState, parsePracticeState } from './practice';
+import { dropWordMastery, emptyPracticeState, parsePracticeState } from './practice';
 
 describe('parsePracticeState', () => {
   it('returns empty on null/garbage', () => {
@@ -20,5 +20,24 @@ describe('parsePracticeState', () => {
     expect(out.words.hund.streaks?.['pairs']).toBe(2);
     expect(out.words.hund.streaks?.['typing-n-l']).toBe(1);
     expect(out.words.hund.attempts).toBe(3);
+  });
+});
+
+describe('dropWordMastery', () => {
+  it('removes the named word', () => {
+    const state = {
+      words: {
+        a: { streaks: {}, attempts: 1, successes: 1 },
+        b: { streaks: {}, attempts: 0, successes: 0 },
+      },
+    };
+    const out = dropWordMastery(state, 'a');
+    expect(out.words).not.toHaveProperty('a');
+    expect(out.words).toHaveProperty('b');
+  });
+
+  it('is a no-op when the id is missing', () => {
+    const state = emptyPracticeState();
+    expect(dropWordMastery(state, 'nope')).toBe(state);
   });
 });

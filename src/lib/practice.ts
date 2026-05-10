@@ -33,3 +33,10 @@ export function savePracticeState(
 ): void {
   storage.setItem(PRACTICE_KEY, JSON.stringify(state));
 }
+
+export function dropWordMastery(state: PracticeState, id: string): PracticeState {
+  if (!(id in state.words)) return state;
+  const next = { ...state.words };
+  delete next[id];
+  return { words: next };
+}

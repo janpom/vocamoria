@@ -121,3 +121,74 @@ export function loadVocab(storage: Pick<Storage, 'getItem'>): Vocab {
 export function saveVocab(storage: Pick<Storage, 'setItem'>, vocab: Vocab): void {
   storage.setItem(VOCAB_KEY, JSON.stringify(vocab));
 }
+
+function slugifyId(s: string): string {
+  const cleaned = s
+    .normalize('NFD')
+    .replace(/\p{M}+/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return cleaned || 'word';
+}
+
+export function generateWordId(term: string, existingIds: ReadonlySet<string>): string {
+  const base = slugifyId(term);
+  if (!existingIds.has(base)) return base;
+  let i = 2;
+  while (existingIds.has(`${base}-${i}`)) i++;
+  return `${base}-${i}`;
+}
+
+export type WordInput = {
+  term: string;
+  translation: string;
+  lesson?: string;
+  alternates?: string[];
+};
+
+function buildWord(id: string, input: WordInput): Word {
+  const term = input.term.trim();
+  const translation = input.translation.trim();
+  if (!term) throw new VocabValidationError('Term is required.');
+  if (!translation) throw new VocabValidationError('Translation is required.');
+  const word: Word = { id, term, translation };
+  const lesson = input.lesson?.trim();
+  if (lesson) word.lesson = lesson;
+  const alternates = (input.alternates ?? [])
+    .map((a) => a.trim())
+    .filter(Boolean);
+  if (alternates.length) word.alternates = alternates;
+  return word;
+}
+
+export function addWord(vocab: Vocab, input: WordInput): Vocab {
+  const ids = new Set(vocab.words.map((w) => w.id));
+  const id = generateWordId(input.term, ids);
+  const word = buildWord(id, input);
+  return { ...vocab, words: [...vocab.words, word] };
+}
+
+export function updateWord(
+  vocab: Vocab,
+  id: string,
+  updates: Partial<Omit<WordInput, never>>,
+): Vocab {
+  const idx = vocab.words.findIndex((w) => w.id === id);
+  if (idx < 0) return vocab;
+  const current = vocab.words[idx];
+  const merged: WordInput = {
+    term: updates.term ?? current.term,
+    translation: updates.translation ?? current.translation,
+    lesson: updates.lesson ?? current.lesson,
+    alternates: updates.alternates ?? current.alternates,
+  };
+  const next = buildWord(current.id, merged);
+  const words = [...vocab.words];
+  words[idx] = next;
+  return { ...vocab, words };
+}
+
+export function removeWord(vocab: Vocab, id: string): Vocab {
+  return { ...vocab, words: vocab.words.filter((w) => w.id !== id) };
+}
