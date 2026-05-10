@@ -68,26 +68,48 @@ describe('wordWeight', () => {
 describe('chooseTypeForWord', () => {
   const eligible = EXERCISE_TYPES;
 
-  it('returns typing-n-l deterministically when the word is promoted', () => {
+  it('promoted + warm user → deterministic typing-n-l', () => {
     let m = applyExerciseResult(emptyWordMastery(), 'pairs', true);
     m = applyExerciseResult(m, 'pairs', true);
-    expect(chooseTypeForWord(m, eligible, () => 0)).toBe('typing-n-l');
-    expect(chooseTypeForWord(m, eligible, () => 0.5)).toBe('typing-n-l');
-    expect(chooseTypeForWord(m, eligible, () => 0.999)).toBe('typing-n-l');
+    expect(chooseTypeForWord(m, eligible, 0.9, () => 0)).toBe('typing-n-l');
+    expect(chooseTypeForWord(m, eligible, 0.9, () => 0.5)).toBe('typing-n-l');
   });
 
-  it('returns typing-n-l deterministically when the streak there is 1', () => {
+  it('promoted + cold user → falls back to Gaussian (not always typing-n-l)', () => {
+    let m = applyExerciseResult(emptyWordMastery(), 'pairs', true);
+    m = applyExerciseResult(m, 'pairs', true);
+    const seen = new Set<ExerciseType>();
+    for (let i = 0; i < 50; i++) {
+      seen.add(chooseTypeForWord(m, eligible, 0.2, () => i / 50));
+    }
+    expect(seen.size).toBeGreaterThan(1);
+  });
+
+  it('always closes typing-n-l streak when streak there is 1', () => {
     const m = applyExerciseResult(emptyWordMastery(), 'typing-n-l', true);
-    expect(chooseTypeForWord(m, eligible, () => 0)).toBe('typing-n-l');
+    // Even with a very cold user, the close-the-streak rule wins.
+    expect(chooseTypeForWord(m, eligible, 0.05, () => 0)).toBe('typing-n-l');
   });
 
   it('falls back to weighted sampling for novice words', () => {
-    // A fresh word should not deterministically pick typing-n-l.
     const seen = new Set<ExerciseType>();
     for (let i = 0; i < 50; i++) {
-      seen.add(chooseTypeForWord(emptyWordMastery(), eligible, () => i / 50));
+      seen.add(chooseTypeForWord(emptyWordMastery(), eligible, 0.5, () => i / 50));
     }
     expect(seen.size).toBeGreaterThan(1);
+  });
+
+  it('hot user shifts the Gaussian toward harder for a fresh word', () => {
+    // With a hot user, typing-n-l should be substantially more likely on a
+    // 0/0 word than with a cold user.
+    let hotPicks = 0;
+    let coldPicks = 0;
+    for (let i = 0; i < 200; i++) {
+      const r = (n: number) => () => n / 200;
+      if (chooseTypeForWord(emptyWordMastery(), eligible, 0.95, r(i)) === 'typing-n-l') hotPicks++;
+      if (chooseTypeForWord(emptyWordMastery(), eligible, 0.05, r(i)) === 'typing-n-l') coldPicks++;
+    }
+    expect(hotPicks).toBeGreaterThan(coldPicks * 3);
   });
 });
 

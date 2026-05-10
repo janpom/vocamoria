@@ -2,12 +2,16 @@ import type { WordMastery } from './mastery';
 
 export const PRACTICE_KEY = 'vocab-practice';
 
+export const USER_SKILL_DEFAULT = 0.5;
+export const USER_SKILL_ALPHA = 0.15;
+
 export type PracticeState = {
   words: Record<string, WordMastery>;
+  userSkill: number;
 };
 
 export function emptyPracticeState(): PracticeState {
-  return { words: {} };
+  return { words: {}, userSkill: USER_SKILL_DEFAULT };
 }
 
 export function parsePracticeState(raw: string | null): PracticeState {
@@ -17,10 +21,22 @@ export function parsePracticeState(raw: string | null): PracticeState {
     if (!parsed || typeof parsed !== 'object' || !parsed.words || typeof parsed.words !== 'object') {
       return emptyPracticeState();
     }
-    return { words: parsed.words as Record<string, WordMastery> };
+    const userSkill =
+      typeof parsed.userSkill === 'number' && parsed.userSkill >= 0 && parsed.userSkill <= 1
+        ? parsed.userSkill
+        : USER_SKILL_DEFAULT;
+    return {
+      words: parsed.words as Record<string, WordMastery>,
+      userSkill,
+    };
   } catch {
     return emptyPracticeState();
   }
+}
+
+export function updateUserSkill(skill: number, exerciseScore: number): number {
+  const next = skill + USER_SKILL_ALPHA * (exerciseScore - skill);
+  return Math.max(0, Math.min(1, next));
 }
 
 export function loadPracticeState(storage: Pick<Storage, 'getItem'>): PracticeState {
@@ -38,5 +54,5 @@ export function dropWordMastery(state: PracticeState, id: string): PracticeState
   if (!(id in state.words)) return state;
   const next = { ...state.words };
   delete next[id];
-  return { words: next };
+  return { ...state, words: next };
 }

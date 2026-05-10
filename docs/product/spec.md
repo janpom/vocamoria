@@ -187,12 +187,17 @@ The Practice screen picks the next `(exerciseType, words)` automatically. **Pick
    ```
    Mastered words (`p = 1`) keep a 0.02 floor, so they remain reachable for review. Unmastered words (`p = 0`) sit at ~1.02. Ratio ≈ 51:1 — mastered words come up *much* less often, but they can still come up and can drop back below 100% on a typing-n-l miss.
 
-2. **Exercise type** — two-stage:
-   - **Deterministic typing-n-l** when the anchor word is *promoted* (any non-typing-n-l streak >= 2) OR `streak[typing-n-l] === 1`. So a known word that's shown competency at any easier level jumps straight to typing-n-l until it either masters or demotes via a failure.
-   - **Otherwise (novice)**: weighted random by Gaussian centered on the anchor word's derived progress in normalized rank space `(rank - 1) / 6`, with a +0.1 floor and a `× 0.5` multiplier on `pairs` (it's tedious, slow it down).
-   ```
-   typeWeight(t, anchor) = exp(-((normRank(t) - progressOf(anchor))^2) * 8) + 0.1
-   ```
+2. **Exercise type** — three-tier:
+   - **Always close out a typing-n-l streak**: when `streak[typing-n-l] === 1` for the anchor, force typing-n-l (only path to mastery, regardless of how the user is doing).
+   - **Promoted + warm user**: when the anchor is promoted AND `userSkill >= 0.5`, force typing-n-l. A cold user (struggling lately) doesn't get pushed — they fall through to the Gaussian.
+   - **Otherwise**: weighted random by Gaussian centered on a **blend of the anchor's progress and the user's recent skill**:
+     ```
+     center = 0.3 * progressOf(anchor) + 0.7 * userSkill
+     typeWeight(t) = (exp(-((normRank(t) - center)^2) * 8) + 0.1) * multiplier(t)
+     ```
+     The `× 0.5` multiplier on `pairs` slows it down (tedious for low per-step gain). All other types have no multiplier.
+
+`userSkill` is an exponential moving average of recent exercise scores (0..1, defaults 0.5, alpha 0.15). After every exercise it's updated with `successCount / totalCount` of that exercise (so a pairs round contributes a fractional score). Persisted in `vocab-practice` alongside per-word state. The blend's heavy weight on `userSkill` is what lets a 0/0 word get a hard exercise when the user is on a hot streak.
 
 3. **For pairs**, the anchor is one of 8; the remaining 7 are sampled by the same `wordWeight` from the rest of the vocab.
 

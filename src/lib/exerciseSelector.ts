@@ -9,7 +9,7 @@ import {
   progressOf,
   streakOf,
 } from './mastery';
-import type { PracticeState } from './practice';
+import { USER_SKILL_DEFAULT, type PracticeState } from './practice';
 import type { Vocab, Word } from './types';
 
 export const PAIRS_EXERCISE_SIZE = 8;
@@ -18,9 +18,21 @@ export const TYPE_WEIGHT_MULTIPLIER: Partial<Record<ExerciseType, number>> = {
   pairs: 0.5,
 };
 
-export function exerciseWeight(exType: ExerciseType, mastery: WordMastery): number {
+export const SKILL_BLEND_WEIGHT = 0.7;
+export const PROMOTION_SKILL_THRESHOLD = 0.5;
+
+export function difficultyCenter(mastery: WordMastery, userSkill: number): number {
+  return (1 - SKILL_BLEND_WEIGHT) * progressOf(mastery) + SKILL_BLEND_WEIGHT * userSkill;
+}
+
+export function exerciseWeight(
+  exType: ExerciseType,
+  mastery: WordMastery,
+  userSkill: number = USER_SKILL_DEFAULT,
+): number {
   const normRank = (EXERCISE_RANK[exType] - 1) / (EXERCISE_TYPES.length - 1);
-  const base = Math.exp(-Math.pow(normRank - progressOf(mastery), 2) * 8) + 0.1;
+  const center = difficultyCenter(mastery, userSkill);
+  const base = Math.exp(-Math.pow(normRank - center, 2) * 8) + 0.1;
   return base * (TYPE_WEIGHT_MULTIPLIER[exType] ?? 1);
 }
 
@@ -51,19 +63,18 @@ function masteryOf(state: PracticeState, id: string): WordMastery {
 export function chooseTypeForWord(
   m: WordMastery,
   eligible: ExerciseType[],
+  userSkill: number = USER_SKILL_DEFAULT,
   random: () => number = Math.random,
 ): ExerciseType {
-  // Deterministic typing-n-l in two cases:
-  //   1. First typing-n-l success landed → close out the streak.
-  //   2. Word is promoted (any non-typing-n-l streak hit STREAK_TARGET).
-  if (
-    eligible.includes('typing-n-l') &&
-    !isMastered(m) &&
-    (streakOf(m, 'typing-n-l') >= 1 || isPromoted(m))
-  ) {
-    return 'typing-n-l';
+  if (eligible.includes('typing-n-l') && !isMastered(m)) {
+    // Always close out an in-progress typing-n-l streak — that's the only
+    // path to mastery.
+    if (streakOf(m, 'typing-n-l') >= 1) return 'typing-n-l';
+    // Promote to typing-n-l only when the user is currently performing well
+    // enough; cold-streak users get the gentler Gaussian fallback.
+    if (isPromoted(m) && userSkill >= PROMOTION_SKILL_THRESHOLD) return 'typing-n-l';
   }
-  const weights = eligible.map((t) => exerciseWeight(t, m));
+  const weights = eligible.map((t) => exerciseWeight(t, m, userSkill));
   return eligible[weightedSampleIndex(weights, random)];
 }
 
@@ -110,7 +121,7 @@ export function pickNextExercise(
   const anchorMastery = masteryOf(state, anchor.id);
 
   const eligible = eligibleExercises(vocab.words.length);
-  const exType = chooseTypeForWord(anchorMastery, eligible, random);
+  const exType = chooseTypeForWord(anchorMastery, eligible, state.userSkill, random);
 
   if (exType === 'pairs') {
     const more = pickWords(

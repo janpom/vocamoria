@@ -6,6 +6,7 @@ import {
   type PracticeState,
   loadPracticeState,
   savePracticeState,
+  updateUserSkill,
 } from '../lib/practice';
 import { loadVocab } from '../lib/vocab';
 import HangmanExercise from '../practice/HangmanExercise';
@@ -35,17 +36,20 @@ export default function Practice() {
   const overall = overallProgress(vocab, state.words);
 
   const onComplete = (outcome: ExerciseOutcome) => {
-    let next = state;
+    let nextWords = state.words;
     for (const r of outcome) {
-      const prev = next.words[r.wordId] ?? emptyWordMastery();
-      next = {
-        ...next,
-        words: {
-          ...next.words,
-          [r.wordId]: applyExerciseResult(prev, picked.ex.exType, r.success),
-        },
+      const prev = nextWords[r.wordId] ?? emptyWordMastery();
+      nextWords = {
+        ...nextWords,
+        [r.wordId]: applyExerciseResult(prev, picked.ex.exType, r.success),
       };
     }
+    const successCount = outcome.filter((r) => r.success).length;
+    const score = outcome.length > 0 ? successCount / outcome.length : 0;
+    const next: PracticeState = {
+      words: nextWords,
+      userSkill: updateUserSkill(state.userSkill, score),
+    };
     savePracticeState(localStorage, next);
     setState(next);
     counter.current += 1;
