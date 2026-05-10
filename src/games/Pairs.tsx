@@ -239,13 +239,13 @@ type SortableCellProps = {
 };
 
 function SortableCell({ id, disabled, className, children }: SortableCellProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({
     id,
     disabled,
+    transition: null,
   });
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    transition,
     opacity: isDragging ? 0.4 : 1,
     touchAction: 'none',
     zIndex: isDragging ? 10 : 'auto',
