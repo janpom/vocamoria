@@ -1,4 +1,22 @@
-import { useMemo, useState } from 'react';
+import {
+  DndContext,
+  type DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { Fragment, type ReactNode, useMemo, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { applyRoundResult, loadProgress, saveProgress } from '../lib/progress';
 import { selectRound, shuffle } from '../lib/selection';
@@ -42,9 +60,14 @@ export default function Pairs() {
   );
 
   const [rightCol, setRightCol] = useState<Word[]>(() => initialRight);
-  const [picked, setPicked] = useState<number | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [finished, setFinished] = useState<Finished | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   if (vocab.words.length === 0) return <Navigate to="/import" replace />;
 
@@ -78,25 +101,18 @@ export default function Pairs() {
     );
   }
 
-  const onPickRight = (i: number) => {
-    if (submitted) return;
-    if (picked === null) {
-      setPicked(i);
-      return;
-    }
-    if (picked === i) {
-      setPicked(null);
-      return;
-    }
-    const next = [...rightCol];
-    [next[picked], next[i]] = [next[i], next[picked]];
-    setRightCol(next);
-    setPicked(null);
+  const onDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setRightCol((prev) => {
+      const oldIndex = prev.findIndex((w) => w.id === active.id);
+      const newIndex = prev.findIndex((w) => w.id === over.id);
+      if (oldIndex < 0 || newIndex < 0) return prev;
+      return arrayMove(prev, oldIndex, newIndex);
+    });
   };
 
-  const onSubmit = () => {
-    setSubmitted(true);
-  };
+  const onSubmit = () => setSubmitted(true);
 
   const onContinue = () => {
     const now = new Date();
@@ -135,6 +151,15 @@ export default function Pairs() {
     ? leftCol.reduce((acc, w, i) => acc + (rightCol[i]?.id === w.id ? 1 : 0), 0)
     : 0;
 
+  const cellBase =
+    'min-h-14 px-3 py-2 rounded-xl text-sm font-medium border-2 flex items-center justify-center text-center break-words select-none';
+
+  const styleFor = (isCorrect: boolean, isWrong: boolean, baseIdle: string): string => {
+    if (isCorrect) return 'bg-emerald-50 border-emerald-400 text-emerald-900';
+    if (isWrong) return 'bg-rose-50 border-rose-400 text-rose-900';
+    return baseIdle;
+  };
+
   return (
     <main className="min-h-dvh p-4 bg-sky-50 text-slate-900 flex flex-col">
       <header className="max-w-md w-full mx-auto mb-3 flex items-center justify-between text-sm text-slate-600">
@@ -142,52 +167,46 @@ export default function Pairs() {
           Home
         </button>
         <span>
-          {submitted ? `${correctSoFar} / ${leftCol.length} correct` : `Reorder right column`}
+          {submitted ? `${correctSoFar} / ${leftCol.length} correct` : 'Reorder right column'}
         </span>
       </header>
 
       <p className="max-w-md w-full mx-auto mb-3 text-xs text-slate-500 text-center">
         {submitted
           ? 'Submitted. Green rows are correct, red rows are wrong.'
-          : 'Tap two cells in the right column to swap them. Match each row to the term on the left, then Submit.'}
+          : 'Drag the right-column items to align each row with the term on the left, then Submit.'}
       </p>
 
-      <div className="max-w-md w-full mx-auto flex-1 space-y-2">
-        {leftCol.map((left, i) => {
-          const right = rightCol[i];
-          const isPicked = !submitted && picked === i;
-          const isCorrect = submitted && right?.id === left.id;
-          const isWrong = submitted && !isCorrect;
-          const rowBaseLeft =
-            'flex-1 min-h-12 px-3 py-2 rounded-xl text-sm font-medium border-2 flex items-center justify-center text-center break-words';
-          const rowBaseRight = `${rowBaseLeft} transition active:scale-[0.97]`;
-          const leftStyle = isCorrect
-            ? 'bg-emerald-50 border-emerald-400 text-emerald-900'
-            : isWrong
-              ? 'bg-rose-50 border-rose-400 text-rose-900'
-              : 'bg-white border-transparent shadow-sm';
-          const rightStyle = isCorrect
-            ? 'bg-emerald-50 border-emerald-400 text-emerald-900'
-            : isWrong
-              ? 'bg-rose-50 border-rose-400 text-rose-900 animate-shake'
-              : isPicked
-                ? 'bg-sky-100 border-sky-500 text-sky-900'
-                : 'bg-white border-transparent shadow-sm';
-          return (
-            <div key={left.id} className="flex gap-2">
-              <div className={`${rowBaseLeft} ${leftStyle}`}>{left.term}</div>
-              <button
-                type="button"
-                disabled={submitted}
-                onClick={() => onPickRight(i)}
-                className={`${rowBaseRight} ${rightStyle}`}
-              >
-                {right?.translation ?? ''}
-              </button>
-            </div>
-          );
-        })}
-      </div>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <SortableContext
+          items={rightCol.map((w) => w.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="max-w-md w-full mx-auto flex-1 grid grid-cols-2 gap-2">
+            {leftCol.map((leftWord, i) => {
+              const right = rightCol[i];
+              const isCorrect = submitted && right?.id === leftWord.id;
+              const isWrong = submitted && !isCorrect;
+              return (
+                <Fragment key={`row-${i}`}>
+                  <div
+                    className={`${cellBase} ${styleFor(isCorrect, isWrong, 'bg-white border-transparent shadow-sm')}`}
+                  >
+                    {leftWord.term}
+                  </div>
+                  <SortableCell
+                    id={right.id}
+                    disabled={submitted}
+                    className={`${cellBase} ${styleFor(isCorrect, isWrong, submitted ? 'bg-white border-transparent shadow-sm' : 'bg-white border-sky-200 shadow-sm cursor-grab active:cursor-grabbing')}`}
+                  >
+                    {right.translation}
+                  </SortableCell>
+                </Fragment>
+              );
+            })}
+          </div>
+        </SortableContext>
+      </DndContext>
 
       <div className="max-w-md w-full mx-auto mt-4">
         {!submitted ? (
@@ -209,5 +228,37 @@ export default function Pairs() {
         )}
       </div>
     </main>
+  );
+}
+
+type SortableCellProps = {
+  id: string;
+  disabled?: boolean;
+  className?: string;
+  children: ReactNode;
+};
+
+function SortableCell({ id, disabled, className, children }: SortableCellProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    disabled,
+  });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    touchAction: 'none',
+    zIndex: isDragging ? 10 : 'auto',
+  };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...(disabled ? {} : listeners)}
+      className={className}
+    >
+      {children}
+    </div>
   );
 }

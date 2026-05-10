@@ -179,7 +179,7 @@ All three games operate on the **same round** of 10 words selected by the rule a
 Two visible columns. Left column shows terms in a random fixed order. Right column shows translations in a random order; the user reorders the right column to align row-by-row with the left, then submits.
 
 - 8 rows per round (smaller than the standard 10).
-- Tap a cell in the right column → it highlights ("picked up"). Tap another right-column cell → the two swap. Tap the picked cell again to clear the selection.
+- Drag the right-column cells to reorder them (mouse, touch, or keyboard via dnd-kit's `SortableContext` with PointerSensor + TouchSensor + KeyboardSensor).
 - Left column is read-only.
 - The initial right-column order is reshuffled if it accidentally matches the left, so the user always has at least one swap to make.
 - **Submit** at the bottom locks the answer. Each row is then graded inline: green if `rightCol[i].id === leftCol[i].id`, red otherwise. The Submit button becomes **Continue**, which advances to the round summary.
