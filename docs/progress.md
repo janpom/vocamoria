@@ -8,16 +8,17 @@ For shipped features (once any exist), see `git log`.
 
 ## Up Next
 
-Build order from the spec:
+Build order:
 
-1. Scaffold Vite + React + TS + Tailwind. `vocab.json` with ~10 sample words.
-2. `progress.ts` and `srs.ts` + Vitest unit tests. No UI yet.
-3. Home screen + Quiz game. End-to-end loop with `localStorage`.
-4. Round summary + streak logic.
-5. Matching game.
-6. Typing game with normalization (`normalize.ts` + tests).
-7. Word list / settings screen.
-8. Polish: animations, colors, sound effects (optional).
+1. Scaffold Vite + React + TS + Tailwind + Vitest. (Files written; `npm install` pending.)
+2. `vocab.ts` + `progress.ts` + `srs.ts` + `normalize.ts` with Vitest unit tests. No UI yet.
+3. `promptTemplate.ts` + Import screen (prompt copy, paste-JSON, validate, merge).
+4. Home screen with empty-state redirect to Import. Quiz game end-to-end with `localStorage`.
+5. Round summary + streak logic.
+6. Matching game.
+7. Typing game (uses `normalize.ts`).
+8. Word list / settings screen (incl. Reset progress, Reset vocab, re-open Import).
+9. Polish: animations, colors, optional sound effects.
 
 ## Ideas / Backlog
 

@@ -28,12 +28,15 @@
 - **Alternatives considered**: SuperMemo SM-2 (Anki-style), FSRS.
 - **Rationale**: The audience is a kid drilling small word lists, not a power user. Leitner is legible (you can see the boxes) and trivial to debug. SM-2's per-card ease factor is overkill and harder to explain when something feels off.
 
-## ADR-005 — Static `vocab.json` as the vocab source
+## ADR-005 — Vocab is user-supplied at runtime, generated via external LLM
 
 - **Date**: 2026-05-10
-- **Decision**: Vocabulary lives in `src/data/vocab.json`, edited by hand and shipped at build time.
-- **Alternatives considered**: Admin UI, runtime upload, fetched JSON from a URL.
-- **Rationale**: There is one editor (the parent) and they are technical enough to edit JSON. Avoids the entire "where do words come from" question and keeps the deploy a static bundle. v2 may add CSV import; that's still a build-time concern.
+- **Decision**: Vocabulary is **not** bundled with the app. Users import a JSON object at runtime via an Import screen and the app stores it in `localStorage` (`vocab-list`). The Import screen ships a copy-pasteable LLM prompt template; the user pastes the prompt + their source material into any external AI tool and pastes the AI's JSON response back into the app.
+- **Alternatives considered**:
+  - Static `src/data/vocab.json` shipped at build time (rejected: hardcodes content into the deploy, requires a rebuild per word list, and the target user is not the developer).
+  - Built-in admin UI for hand-typing words (rejected: tedious for the kid's parent vs. dropping a textbook page into ChatGPT).
+  - Direct CSV / file / image upload with in-app parsing (rejected for v1: each input format needs its own parser, and the LLM does the messy extraction more flexibly than we can hand-roll).
+- **Rationale**: Pushes the "extract structured vocab from messy input" problem to a tool that is already excellent at it. Keeps the app a static bundle with no parsing dependencies. The same flow works for any source language, any source material (textbook scan, photo OCR, lesson notes), with zero code changes. Cost of pasting once per import is negligible.
 
 ## ADR-006 — Vitest for unit tests
 

@@ -20,9 +20,19 @@ The app is **language-independent**: any pair of languages works. The primary us
 - No audio/TTS in v1 (can add later via Web Speech API).
 - No localization framework. UI is English. Vocab content is whatever the user puts in.
 
-## Data model
+## Vocab input flow
 
-### Vocabulary file (`src/data/vocab.json`)
+Vocab is **not bundled with the app**. The user supplies it at runtime by importing a JSON object that conforms to the schema below. The intended workflow:
+
+1. User opens the **Import** screen (auto-shown on first load when no vocab exists; reachable from Settings otherwise).
+2. UI displays a **prompt template** with two editable fields: source language and target language. The template is pre-filled with sensible defaults but fully editable.
+3. User clicks **Copy prompt**, opens an external AI tool (ChatGPT, Claude, Gemini, …), pastes the prompt, then appends their source material (textbook page text, lesson notes, photo OCR, raw word list — anything).
+4. AI returns a JSON object. User pastes it into the **Paste JSON** textarea on the Import screen.
+5. App validates the JSON, stores it in `localStorage`, and routes to Home.
+
+A user can re-import at any time. Re-importing **merges by `id`** (preserves existing progress for words whose `id` is unchanged; adds new words; does not auto-remove omitted words — explicit "Remove word" is a Settings action).
+
+### Vocab schema
 
 ```json
 {
@@ -31,8 +41,7 @@ The app is **language-independent**: any pair of languages works. The primary us
   },
   "words": [
     { "id": "hund",  "term": "der Hund",  "translation": "pes" },
-    { "id": "katze", "term": "die Katze", "translation": "kočka" },
-    { "id": "haus",  "term": "das Haus",  "translation": "dům" }
+    { "id": "katze", "term": "die Katze", "translation": "kočka" }
   ]
 }
 ```
@@ -48,6 +57,58 @@ The app is **language-independent**: any pair of languages works. The primary us
 Optional per-word fields:
 - `lesson`: string tag like `"unit-3"` for filtering by chapter.
 - `alternates`: array of additional accepted answers for typing mode.
+
+Stored in `localStorage` under the key `vocab-list`.
+
+### LLM prompt template (shown in the Import UI)
+
+The Import screen displays this verbatim, with `{SOURCE_LANG}` and `{TARGET_LANG}` substituted from the user's input fields. Users edit if they want; a **Reset to default** button restores it.
+
+```
+You are converting source material into a vocabulary list for a flash-card app.
+
+Source language (the words to learn): {SOURCE_LANG}
+Translation language (the user's known language): {TARGET_LANG}
+
+The source material is appended below, after the marker `---INPUT---`. It may
+be a word list, a textbook page, lesson notes, OCR output, or arbitrary text.
+Extract every distinct vocabulary item suitable for drilling.
+
+For each item produce one JSON object with:
+- "id": short stable slug, lowercase ASCII letters/digits/hyphens only, no
+  spaces. Derive from the term itself (e.g. "der Hund" -> "hund",
+  "to go to school" -> "to-go-to-school"). Must be unique within the list.
+- "term": the word or short phrase in {SOURCE_LANG}, exactly as it should be
+  displayed and typed by the learner. Include articles for nouns, accents,
+  capitalization conventions of the language.
+- "translation": the {TARGET_LANG} equivalent. Keep it short and unambiguous.
+
+Also produce a top-level "settings" object:
+- "articlePrefixes": array of leading article tokens common in {SOURCE_LANG}
+  that a learner might omit when typing (e.g. ["der","die","das"] for German,
+  ["el","la","los","las"] for Spanish, ["le","la","les"] for French). Use []
+  if the language has no such articles or it does not apply.
+
+Output exactly one JSON object and nothing else — no prose, no markdown
+fences, no commentary. Schema:
+
+{
+  "settings": { "articlePrefixes": [...] },
+  "words": [
+    { "id": "...", "term": "...", "translation": "..." }
+  ]
+}
+
+Rules:
+- ids must be unique; if two items would collide, suffix with -2, -3, ...
+- skip exact duplicates
+- do not include grammar metadata (gender labels, part-of-speech tags) as
+  separate fields; if useful, fold into "term" the way a dictionary would
+- if input is empty or unusable, return {"settings":{"articlePrefixes":[]},"words":[]}
+
+---INPUT---
+<paste your source material here>
+```
 
 ### Progress state (localStorage key: `vocab-progress`)
 
@@ -160,7 +221,17 @@ After each round, show:
 - Total XP.
 - Three big tappable cards: "Matching", "Quiz", "Typing".
 - Small "Words" link → list view of all vocab with mastery labels and per-word stats.
-- Settings cog → "Reset progress" (with confirmation), "Lesson filter" (if `lesson` tags are used).
+- Settings cog → "Import vocab" (re-open Import screen), "Reset progress" (with confirmation), "Reset vocab" (with confirmation), "Lesson filter" (if `lesson` tags are used).
+
+If no vocab is loaded (`localStorage` key `vocab-list` empty), Home redirects to the Import screen and the game cards are not reachable.
+
+## Import screen
+
+- Two text inputs: **Source language** (e.g. "German"), **Target language** (e.g. "Czech"). Persisted to `localStorage` under `vocab-import-prefs` so re-imports remember the values.
+- Read-only-by-default textarea showing the **prompt template** with the language fields substituted in. **Edit** toggle makes it editable; **Reset to default** restores the canonical template.
+- **Copy prompt** button (writes to clipboard).
+- Step-by-step instructions: "Paste this prompt into ChatGPT / Claude / your AI tool, append your source material, then paste the JSON response below."
+- **Paste JSON** textarea + **Import** button. On click: parse, validate against schema, merge into existing `vocab-list` by `id`, route to Home. On parse/validation failure, show inline error with the offending message; do not partially import.
 
 ## Visual design
 
@@ -174,7 +245,7 @@ After each round, show:
 
 - Audio via Web Speech API (`new SpeechSynthesisUtterance(word); u.lang = '<lang>'` — language read from `settings`).
 - Falling-words / asteroids game.
-- Import vocab from CSV or paste.
-- Multiple word lists / per-chapter progress.
-- Export/backup of progress.
+- Direct CSV / image / file upload on the Import screen (v1 is paste-only — the AI step does the parsing).
+- Multiple named word lists / per-chapter progress.
+- Export/backup of progress and vocab as a JSON file.
 - UI localization.

@@ -19,19 +19,20 @@
 
 ```
 src/
-  data/
-    vocab.json           // user-edited word list + per-list settings
   lib/                   // pure logic, no React, unit-tested
     srs.ts               // Leitner box logic, interval/due-date math
     selection.ts         // pick 10 words for a round
-    progress.ts          // localStorage read/write, streak update
+    progress.ts          // localStorage read/write for vocab-progress, streak update
+    vocab.ts             // localStorage read/write for vocab-list, validation, merge-by-id
     normalize.ts         // string normalization for typing mode
+    promptTemplate.ts    // canonical LLM prompt string + substitution helper
   games/
     Matching.tsx
     Quiz.tsx
     Typing.tsx
   screens/
     Home.tsx
+    Import.tsx           // prompt template, copy button, paste-JSON area
     RoundSummary.tsx
     WordList.tsx
   App.tsx
@@ -42,12 +43,13 @@ The split between `lib/` (pure) and `games/`+`screens/` (React) is load-bearing:
 
 ## Data Flow
 
-1. User opens app → `progress.ts` reads `vocab-progress` from `localStorage` (or returns empty default).
-2. User taps a game → `selection.ts` picks 10 words from `vocab.json` using current progress.
-3. Game component drives the round. On each answer, it calls `srs.ts` to update the word's box/`nextDue`, and `progress.ts` to persist.
-4. Round ends → `RoundSummary` shows results, `progress.ts` increments streak/XP.
+1. User opens app → `vocab.ts` reads `vocab-list` from `localStorage`. If empty, route to Import screen and stop here.
+2. User pastes JSON on Import → `vocab.ts` validates, merges by `id`, writes back to `localStorage`. Route to Home.
+3. User taps a game → `selection.ts` picks 10 words from the current vocab list using progress from `progress.ts`.
+4. Game component drives the round. On each answer, it calls `srs.ts` to update the word's box/`nextDue`, and `progress.ts` to persist.
+5. Round ends → `RoundSummary` shows results, `progress.ts` increments streak/XP.
 
-There is no central store. Each screen reads progress on mount; writes happen through `progress.ts` helpers that re-serialize the whole `Progress` blob.
+Two independent `localStorage` keys: `vocab-list` (the words) and `vocab-progress` (per-word stats + streak + XP). They are joined by `WordStats[id]` keying off `Word.id`. There is no central store; each screen reads what it needs on mount and writes through the relevant `lib/` helper.
 
 ## External Integrations
 
