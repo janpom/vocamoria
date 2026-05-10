@@ -34,6 +34,15 @@ export function recordWrong(stats: WordStats, now: Date): WordStats {
   };
 }
 
+export function recordRecognition(stats: WordStats, now: Date): WordStats {
+  return {
+    ...stats,
+    seen: stats.seen + 1,
+    correct: stats.correct + 1,
+    lastSeen: now.toISOString(),
+  };
+}
+
 export function isDue(stats: WordStats, now: Date): boolean {
   return stats.nextDue <= now.toISOString();
 }

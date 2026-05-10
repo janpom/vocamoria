@@ -6,6 +6,7 @@ import {
   masteryLabel,
   newWordStats,
   recordCorrect,
+  recordRecognition,
   recordWrong,
 } from './srs';
 
@@ -60,6 +61,22 @@ describe('recordWrong', () => {
   it('floors box at 0', () => {
     const s = recordWrong(newWordStats(NOW), NOW);
     expect(s.box).toBe(0);
+  });
+});
+
+describe('recordRecognition', () => {
+  it('bumps seen and correct, updates lastSeen, leaves box and nextDue alone', () => {
+    let s = recordCorrect(newWordStats(NOW), NOW);
+    s = recordCorrect(s, NOW);
+    expect(s.box).toBe(2);
+    const before = { ...s };
+    const later = new Date(NOW.getTime() + 60_000);
+    const r = recordRecognition(s, later);
+    expect(r.box).toBe(before.box);
+    expect(r.nextDue).toBe(before.nextDue);
+    expect(r.seen).toBe(before.seen + 1);
+    expect(r.correct).toBe(before.correct + 1);
+    expect(r.lastSeen).toBe(later.toISOString());
   });
 });
 

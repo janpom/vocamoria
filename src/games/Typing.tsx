@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { buildOptions } from '../lib/distractors';
+import { checkAnswer } from '../lib/normalize';
 import { applyRoundResult, loadProgress, saveProgress } from '../lib/progress';
 import { selectRound } from '../lib/selection';
 import { newWordStats, recordCorrect, recordWrong } from '../lib/srs';
@@ -8,27 +8,18 @@ import type { Progress, Word, WordStats } from '../lib/types';
 import { loadVocab } from '../lib/vocab';
 import RoundSummary, { type RoundResult } from '../screens/RoundSummary';
 
-const FEEDBACK_MS = 600;
-
-type Question = {
-  word: Word;
-  options: Word[];
-};
+const FEEDBACK_MS = 700;
 
 type Phase =
   | { kind: 'asking' }
-  | { kind: 'feedback'; pickedId: string; correct: boolean };
+  | { kind: 'feedback'; correct: boolean; close: boolean; submitted: string };
 
 type Finished = {
-  newProgress: Progress;
+  progress: Progress;
   xpEarned: number;
   streakBumped: boolean;
   results: RoundResult[];
 };
-
-function buildQuestions(round: Word[], pool: Word[]): Question[] {
-  return round.map((w) => ({ word: w, options: buildOptions(w, pool) }));
-}
 
 function computeXP(results: RoundResult[]): number {
   const correct = results.filter((r) => r.correct).length;
@@ -37,7 +28,7 @@ function computeXP(results: RoundResult[]): number {
   return xp;
 }
 
-export default function Quiz() {
+export default function Typing() {
   const navigate = useNavigate();
   const vocab = useMemo(() => loadVocab(localStorage), []);
   const startingProgress = useMemo(() => loadProgress(localStorage), []);
@@ -45,13 +36,18 @@ export default function Quiz() {
     () => selectRound(vocab, startingProgress, new Date()),
     [vocab, startingProgress],
   );
-  const questions = useMemo(() => buildQuestions(round, vocab.words), [round, vocab.words]);
 
   const [idx, setIdx] = useState(0);
   const [results, setResults] = useState<RoundResult[]>([]);
+  const [input, setInput] = useState('');
   const [phase, setPhase] = useState<Phase>({ kind: 'asking' });
   const [finished, setFinished] = useState<Finished | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (phase.kind === 'asking') inputRef.current?.focus();
+  }, [phase.kind, idx]);
 
   useEffect(
     () => () => {
@@ -60,18 +56,13 @@ export default function Quiz() {
     [],
   );
 
-  if (vocab.words.length === 0) {
-    return <Navigate to="/import" replace />;
-  }
+  if (vocab.words.length === 0) return <Navigate to="/import" replace />;
 
-  if (questions.length === 0) {
+  if (round.length === 0) {
     return (
       <main className="min-h-dvh p-6 flex items-center justify-center bg-sky-50 text-slate-900">
         <div className="max-w-md text-center space-y-4">
           <h1 className="text-2xl font-bold">No words to play</h1>
-          <p className="text-slate-600">
-            Your vocab list is empty. Import some words first.
-          </p>
           <button
             type="button"
             onClick={() => navigate('/import')}
@@ -89,7 +80,7 @@ export default function Quiz() {
       <RoundSummary
         results={finished.results}
         xpEarned={finished.xpEarned}
-        streakCount={finished.newProgress.streak.count}
+        streakCount={finished.progress.streak.count}
         streakBumped={finished.streakBumped}
         onPlayAgain={() => navigate(0)}
         onHome={() => navigate('/')}
@@ -97,7 +88,7 @@ export default function Quiz() {
     );
   }
 
-  const current = questions[idx];
+  const current: Word = round[idx];
 
   const finishRound = (allResults: RoundResult[]) => {
     const now = new Date();
@@ -110,7 +101,7 @@ export default function Quiz() {
     const newProgress = applyRoundResult(startingProgress, updates, xpEarned, now);
     saveProgress(localStorage, newProgress);
     setFinished({
-      newProgress,
+      progress: newProgress,
       xpEarned,
       streakBumped: newProgress.streak.count > startingProgress.streak.count,
       results: allResults,
@@ -118,27 +109,36 @@ export default function Quiz() {
   };
 
   const advance = (allResults: RoundResult[]) => {
-    if (idx + 1 >= questions.length) {
+    if (idx + 1 >= round.length) {
       finishRound(allResults);
     } else {
       setResults(allResults);
       setIdx(idx + 1);
+      setInput('');
       setPhase({ kind: 'asking' });
     }
   };
 
-  const pick = (optionId: string) => {
-    if (phase.kind !== 'asking') return;
-    const correct = optionId === current.word.id;
-    const newResults = [...results, { word: current.word, correct }];
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (phase.kind !== 'asking' || !input.trim()) return;
+    const result = checkAnswer(input, current.term, current.alternates ?? [], {
+      articlePrefixes: vocab.settings.articlePrefixes,
+    });
+    const newResults = [...results, { word: current, correct: result.correct }];
     setResults(newResults);
-    setPhase({ kind: 'feedback', pickedId: optionId, correct });
-    if (correct) {
+    setPhase({
+      kind: 'feedback',
+      correct: result.correct,
+      close: result.close,
+      submitted: input.trim(),
+    });
+    if (result.correct && !result.close) {
       timerRef.current = window.setTimeout(() => advance(newResults), FEEDBACK_MS);
     }
   };
 
-  const next = () => {
+  const onNext = () => {
     if (phase.kind !== 'feedback') return;
     advance(results);
   };
@@ -150,51 +150,74 @@ export default function Quiz() {
           Home
         </button>
         <span>
-          {idx + 1} / {questions.length}
+          {idx + 1} / {round.length}
         </span>
       </header>
 
       <section className="max-w-md w-full mx-auto flex-1 flex flex-col">
         <div className="text-center mb-8 mt-4">
-          <div className="text-sm text-slate-500 mb-2">Translate</div>
-          <div className="text-4xl font-bold">{current.word.term}</div>
+          <div className="text-sm text-slate-500 mb-2">Type in the original language</div>
+          <div className="text-4xl font-bold">{current.translation}</div>
         </div>
 
-        <div className="space-y-3 flex-1">
-          {current.options.map((opt) => {
-            const isPicked = phase.kind === 'feedback' && phase.pickedId === opt.id;
-            const isCorrectAnswer = opt.id === current.word.id;
-            const showAsCorrect =
-              phase.kind === 'feedback' && (isCorrectAnswer || isPicked) && isCorrectAnswer;
-            const showAsWrong = isPicked && !isCorrectAnswer;
-            const baseStyle = 'w-full min-h-14 px-4 py-4 rounded-xl text-lg font-medium text-left transition active:scale-[0.99]';
-            const stateStyle = showAsCorrect
-              ? 'bg-emerald-100 border-2 border-emerald-500 text-emerald-900 animate-pop'
-              : showAsWrong
-                ? 'bg-rose-100 border-2 border-rose-500 text-rose-900 animate-shake'
-                : 'bg-white border-2 border-transparent text-slate-900 shadow-sm';
-            return (
+        <form onSubmit={onSubmit} className="space-y-3">
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            disabled={phase.kind !== 'asking'}
+            autoComplete="off"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            className={`w-full min-h-12 px-4 py-3 text-xl rounded-xl border-2 bg-white focus:outline-none disabled:opacity-100 ${
+              phase.kind === 'feedback' && phase.correct && !phase.close
+                ? 'border-emerald-500 bg-emerald-50 animate-pop'
+                : phase.kind === 'feedback' && phase.correct && phase.close
+                  ? 'border-amber-400 bg-amber-50'
+                  : phase.kind === 'feedback' && !phase.correct
+                    ? 'border-rose-500 bg-rose-50 animate-shake'
+                    : 'border-sky-300 focus:border-sky-500'
+            }`}
+            placeholder="your answer"
+          />
+          {phase.kind === 'asking' && (
+            <button
+              type="submit"
+              disabled={!input.trim()}
+              className="w-full min-h-12 py-3 rounded-xl bg-sky-600 text-white font-semibold disabled:opacity-50"
+            >
+              Submit
+            </button>
+          )}
+        </form>
+
+        {phase.kind === 'feedback' && (
+          <div className="mt-4 space-y-3">
+            {phase.correct && !phase.close && (
+              <div className="text-center text-emerald-700 font-semibold text-lg">Correct!</div>
+            )}
+            {phase.correct && phase.close && (
+              <div className="text-center text-amber-700">
+                Close — correct: <strong>{current.term}</strong>
+              </div>
+            )}
+            {!phase.correct && (
+              <div className="text-center text-rose-700">
+                Correct answer: <strong>{current.term}</strong>
+              </div>
+            )}
+            {!(phase.correct && !phase.close) && (
               <button
-                key={opt.id}
                 type="button"
-                onClick={() => pick(opt.id)}
-                disabled={phase.kind !== 'asking'}
-                className={`${baseStyle} ${stateStyle} disabled:cursor-default`}
+                onClick={onNext}
+                className="w-full min-h-12 py-3 rounded-xl bg-sky-600 text-white font-semibold"
               >
-                {opt.translation}
+                Next
               </button>
-            );
-          })}
-        </div>
-
-        {phase.kind === 'feedback' && !phase.correct && (
-          <button
-            type="button"
-            onClick={next}
-            className="mt-6 w-full min-h-12 py-3 rounded-xl bg-sky-600 text-white font-semibold"
-          >
-            Next
-          </button>
+            )}
+          </div>
         )}
       </section>
     </main>

@@ -25,15 +25,17 @@ export default function Home() {
         </header>
 
         <div className="space-y-3">
-          <GameCard label="Matching" />
+          <GameCard label="Matching" to="/matching" />
           <GameCard label="Quiz" to="/quiz" />
-          <GameCard label="Typing" />
+          <GameCard label="Typing" to="/typing" />
         </div>
 
         <footer className="mt-8 text-center text-sm text-slate-600 flex items-center justify-center gap-4">
-          <span>{vocab.words.length} words loaded</span>
-          <Link to="/import" className="underline text-sky-700">
-            Re-import vocab
+          <Link to="/words" className="underline text-sky-700">
+            Words ({vocab.words.length})
+          </Link>
+          <Link to="/settings" className="underline text-sky-700" aria-label="Settings">
+            Settings
           </Link>
         </footer>
       </div>
@@ -41,24 +43,13 @@ export default function Home() {
   );
 }
 
-function GameCard({ label, to }: { label: string; to?: string }) {
-  const className =
-    'w-full py-6 rounded-2xl bg-white shadow-sm text-2xl font-semibold text-sky-700 transition active:scale-[0.98] block text-center';
-  if (to) {
-    return (
-      <Link to={to} className={className}>
-        {label}
-      </Link>
-    );
-  }
+function GameCard({ label, to }: { label: string; to: string }) {
   return (
-    <button
-      type="button"
-      disabled
-      className={`${className} opacity-60 cursor-not-allowed`}
+    <Link
+      to={to}
+      className="block w-full py-6 rounded-2xl bg-white shadow-sm text-2xl font-semibold text-sky-700 transition active:scale-[0.98] text-center"
     >
       {label}
-      <span className="block text-xs font-normal text-slate-500 mt-1">coming soon</span>
-    </button>
+    </Link>
   );
 }
