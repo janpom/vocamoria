@@ -8,10 +8,15 @@ import RemoteLoader from './RemoteLoader';
 export default function Home() {
   const [params] = useSearchParams();
   const remoteUrl = params.get('vocab');
-  if (remoteUrl) return <RemoteLoader url={remoteUrl} />;
 
-  const vocab = useMemo(() => loadVocab(localStorage), []);
-  const state = useMemo(() => loadPracticeState(localStorage), []);
+  // Hooks must run in the same order every render — call them before any
+  // conditional return. Key the memos off remoteUrl so when RemoteLoader
+  // finishes and navigates back to `/`, the localStorage read picks up the
+  // freshly-saved vocab.
+  const vocab = useMemo(() => loadVocab(localStorage), [remoteUrl]);
+  const state = useMemo(() => loadPracticeState(localStorage), [remoteUrl]);
+
+  if (remoteUrl) return <RemoteLoader url={remoteUrl} />;
 
   if (vocab.words.length === 0) {
     return <Navigate to="/import" replace />;
