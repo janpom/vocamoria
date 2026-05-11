@@ -236,7 +236,7 @@ Auto-advance on exact correct after 700 ms; manual Next on wrong / close.
 
 Prompt at top, target rendered cell-by-cell with hidden letters as underline placeholders, on-screen A–Z keyboard at the bottom, plus physical keyboard input. Spaces, punctuation, digits pre-revealed (only Unicode `\p{L}` is guessable). Word-aware wrapping: each space-separated word is its own no-wrap group, only inter-word spaces wrap.
 
-Letter matching is **case- and accent-insensitive**: `O` reveals every `o/O/ö/Ö/ó/Ó` in the target. Internally normalized via `lowercase + stripAccents` (NFD then drop combining marks `\p{M}`).
+Letter matching is **case- and accent-insensitive**: `O` reveals every `o/O/ö/Ö/ó/Ó` in the target. Internally normalized via `lowercase + stripAccents` (NFD then drop combining marks `\p{M}`). German `ß` additionally folds to `s` (NFD doesn't decompose it; tap `S` to reveal `ß` cells). The on-screen keyboard stays plain A–Z.
 
 1 mistake allowed; 2nd mistake fails the word. Win → green flash + auto-advance after 900 ms. Loss → reveal full word with missing letters tinted red, Next to advance.
 
