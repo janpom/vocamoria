@@ -150,6 +150,11 @@ describe('generateWordId', () => {
     expect(generateWordId('São Paulo', new Set())).toBe('sao-paulo');
   });
 
+  it('folds German ß to ss', () => {
+    expect(generateWordId('Heißen', new Set())).toBe('heissen');
+    expect(generateWordId('Straße', new Set())).toBe('strasse');
+  });
+
   it('falls back to "word" when slug is empty', () => {
     expect(generateWordId('!?', new Set())).toBe('word');
   });

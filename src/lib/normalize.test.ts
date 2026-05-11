@@ -92,6 +92,13 @@ describe('normalizeLetter / lettersEqual', () => {
     expect(normalizeLetter('Ö')).toBe('o');
     expect(normalizeLetter('Č')).toBe('c');
   });
+
+  it('folds German ß to s', () => {
+    expect(normalizeLetter('ß')).toBe('s');
+    expect(lettersEqual('ß', 's')).toBe(true);
+    expect(lettersEqual('S', 'ß')).toBe(true);
+    expect(lettersEqual('ß', 'b')).toBe(false);
+  });
 });
 
 describe('isGuessableLetter', () => {

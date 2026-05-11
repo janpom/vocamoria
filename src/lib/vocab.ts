@@ -127,6 +127,7 @@ function slugifyId(s: string): string {
     .normalize('NFD')
     .replace(/\p{M}+/gu, '')
     .toLowerCase()
+    .replace(/ß/g, 'ss')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
   return cleaned || 'word';

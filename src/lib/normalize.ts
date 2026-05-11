@@ -66,8 +66,13 @@ export function stripAccents(s: string): string {
   return s.normalize('NFD').replace(/\p{M}+/gu, '');
 }
 
+const LETTER_FOLDS: Record<string, string> = {
+  ß: 's',
+};
+
 export function normalizeLetter(c: string): string {
-  return stripAccents(c.toLowerCase());
+  const lower = c.toLowerCase();
+  return LETTER_FOLDS[lower] ?? stripAccents(lower);
 }
 
 export function lettersEqual(a: string, b: string): boolean {
