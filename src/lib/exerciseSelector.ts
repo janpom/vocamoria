@@ -37,9 +37,13 @@ export function eligibleExercises(vocabSize: number): ExerciseType[] {
   return EXERCISE_TYPES.filter((t) => (t === 'pairs' ? vocabSize >= 2 : vocabSize >= 1));
 }
 
+export const MASTERED_WORD_WEIGHT = 0.005;
+export const NON_MASTERED_FLOOR = 0.05;
+
 export function wordWeight(progress: number): number {
+  if (progress >= 1) return MASTERED_WORD_WEIGHT;
   const inv = 1 - progress;
-  return inv * inv + 0.02;
+  return inv * inv + NON_MASTERED_FLOOR;
 }
 
 export function weightedSampleIndex(weights: number[], random: () => number): number {

@@ -65,10 +65,21 @@ describe('wordWeight', () => {
     expect(wordWeight(0.5)).toBeGreaterThan(wordWeight(1));
   });
 
-  it('keeps mastered words selectable but at much lower weight', () => {
-    const ratio = wordWeight(0) / wordWeight(1);
+  it('keeps mastered words selectable but at very low weight', () => {
     expect(wordWeight(1)).toBeGreaterThan(0);
-    expect(ratio).toBeGreaterThan(40);
+    const ratio = wordWeight(0) / wordWeight(1);
+    expect(ratio).toBeGreaterThan(100);
+  });
+
+  it('near-mastered (in-streak) words stay well above the mastered floor', () => {
+    // A word at progress 0.85 (typing-n-l streak == 1) needs to be
+    // pickable so the user can close out the streak.
+    expect(wordWeight(0.85)).toBeGreaterThan(wordWeight(1) * 5);
+  });
+
+  it('drops sharply at the mastered cliff', () => {
+    // Just before mastery vs at mastery: big gap.
+    expect(wordWeight(0.99)).toBeGreaterThan(wordWeight(1) * 5);
   });
 });
 

@@ -183,9 +183,10 @@ The Practice screen picks the next `(exerciseType, words)` automatically. **Pick
 
 1. **Anchor word** — sampled from the vocab by:
    ```
-   wordWeight(p) = (1 - p)^2 + 0.02
+   wordWeight(p) = 0.005                    if p >= 1 (mastered)
+                   (1 - p)^2 + 0.05         otherwise
    ```
-   Mastered words (`p = 1`) keep a 0.02 floor, so they remain reachable for review. Unmastered words (`p = 0`) sit at ~1.02. Ratio ≈ 51:1 — mastered words come up *much* less often, but they can still come up and can drop back below 100% on a typing-n-l miss.
+   Two-tier: mastered words drop to a small floor (0.005) so they're rare review picks; non-mastered words sit on a `(1-p)^2 + 0.05` curve so they remain reachable even when `p` approaches the mastery cliff (a word at progress 0.85 — typing-n-l streak == 1 — has weight 0.0725, ~14× the mastered floor, so the close-the-streak rule fires often enough to graduate the word). Ratio ≈ 200:1 between an untouched word and a mastered one — convergence to 100% stays fast even when most words are already done.
 
 2. **Exercise type** — three-tier:
    - **Always close out a typing-n-l streak**: when `streak[typing-n-l] === 1` for the anchor, force typing-n-l (only path to mastery, regardless of how the user is doing).
